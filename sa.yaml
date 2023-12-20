@@ -1,0 +1,80 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: backsnap
+  namespace: backsnap
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: backsnap
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - persistentvolumeclaims
+  verbs:
+  - list
+  - get
+  - watch
+- apiGroups:
+  - "snapshot.storage.k8s.io"
+  resources:
+  - volumesnapshots
+  verbs:
+  - list
+  - get
+  - watch
+  - create
+  - delete
+# TODO: these next roles allows creating and deleting PVCs and jobs anywhere.
+# Once cross-namespace data sources are implemented, this SA only needs
+# rights to create and delete PVCs and jobs in the backsnap namespace, which is
+# much safer.
+# https://kubernetes.io/blog/2023/01/02/cross-namespace-data-sources-alpha/
+- apiGroups:
+  - ""
+  resources:
+  - persistentvolumeclaims
+  verbs:
+  - create
+  - delete
+- apiGroups:
+  - "batch"
+  resources:
+  - jobs
+  verbs:
+  - list
+  - get
+  - watch
+  - create
+  - delete
+- apiGroups:
+  - ""
+  resources:
+  - pods
+  verbs:
+  - list
+  - get
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - pods/log
+  verbs:
+  - list
+  - get
+  - watch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: backsnap
+subjects:
+- kind: ServiceAccount
+  name: backsnap
+  namespace: backsnap
+roleRef:
+  kind: ClusterRole
+  name: backsnap
+  apiGroup: rbac.authorization.k8s.io

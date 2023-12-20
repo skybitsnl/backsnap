@@ -1,0 +1,20 @@
+FROM restic/restic:0.16.0 AS restic
+
+FROM ubuntu:focal
+
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends ca-certificates curl \
+  && rm -rf /var/lib/apt/lists/*
+
+RUN curl -L \
+	https://storage.googleapis.com/kubernetes-release/release/$(curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)/bin/linux/amd64/kubectl \
+	-o /usr/local/bin/kubectl && \
+	ls -la /usr/local/bin && \
+	chmod +x /usr/local/bin/kubectl && \
+	kubectl version --client
+
+COPY --from=restic /usr/bin/restic /usr/bin/restic
+RUN restic version
+
+COPY restic.sh /usr/local/bin
+CMD restic.sh
