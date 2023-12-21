@@ -47,7 +47,7 @@ var (
 )
 
 var (
-	noBackupAnnotation = "skyb.it/backsnap-no-backup"
+	NoBackupAnnotation = "skyb.it/backsnap-no-backup"
 )
 
 /*
@@ -94,33 +94,9 @@ func main() {
 	config := cruntimeconfig.GetConfigOrDie()
 	clientset := kubernetes.NewForConfigOrDie(config)
 
-	var pvcs []corev1.PersistentVolumeClaim
-
-	for _, namespace := range namespaces {
-		result, err := clientset.CoreV1().PersistentVolumeClaims(namespace).List(ctx, metav1.ListOptions{})
-		if err != nil {
-			slog.ErrorContext(ctx, "failed listing PVCs", slog.Any("err", err))
-			return
-		}
-
-		for _, pvc := range result.Items {
-			if _, ok := pvc.Annotations[noBackupAnnotation]; ok {
-				// ignore PVCs with a "no-backup" annotation
-				continue
-			}
-
-			if pvc.DeletionTimestamp != nil {
-				// ignore PVCs that are being deleted
-				continue
-			}
-
-			if _, ok := excludeNamespaces[pvc.Namespace]; ok {
-				// ignore PVCs in excluded namespaces
-				continue
-			}
-
-			pvcs = append(pvcs, pvc)
-		}
+	pvcs, err := SelectPVCsForBackup(ctx, clientset, namespaces, excludeNamespaces)
+	if err != nil {
+		log.Fatal(err)
 	}
 
 	var errs []error
@@ -322,7 +298,7 @@ func BackupPvc(ctx context.Context, config *rest.Config, namespace, pvcName stri
 			Namespace: namespace,
 			Name:      backupName,
 			Annotations: map[string]string{
-				noBackupAnnotation: "true",
+				NoBackupAnnotation: "true",
 			},
 		},
 		Spec: corev1.PersistentVolumeClaimSpec{

@@ -3,6 +3,7 @@ module github.com/skybitsnl/backsnap
 go 1.21.5
 
 require (
+	github.com/go-test/deep v1.1.0
 	github.com/samber/lo v1.39.0
 	k8s.io/cli-runtime v0.29.0
 )
