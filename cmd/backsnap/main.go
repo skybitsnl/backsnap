@@ -8,9 +8,13 @@ import (
 	"strings"
 	"time"
 
+	volumesnapshotv1 "github.com/kubernetes-csi/external-snapshotter/client/v6/apis/volumesnapshot/v1"
 	"github.com/samber/lo"
+	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/kubernetes"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	cruntimeconfig "sigs.k8s.io/controller-runtime/pkg/client/config"
 )
@@ -81,7 +85,12 @@ func main() {
 	config := cruntimeconfig.GetConfigOrDie()
 	scheme := runtime.NewScheme()
 	corev1.AddToScheme(scheme)
+	batchv1.AddToScheme(scheme)
+	volumesnapshotv1.AddToScheme(scheme)
 	kclient, err := client.New(config, client.Options{Scheme: scheme})
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	pvcs, err := SelectPVCsForBackup(ctx, kclient, namespaces, excludeNamespaces)
 	if err != nil {
@@ -90,6 +99,9 @@ func main() {
 
 	var errs []error
 	namespacesSeen := map[string]struct{}{}
+
+	clientset := kubernetes.NewForConfigOrDie(config)
+	dynamicClient := dynamic.NewForConfigOrDie(config)
 
 	for i, pvc := range pvcs {
 		namespace := pvc.Namespace
@@ -102,7 +114,7 @@ func main() {
 			time.Sleep(time.Duration(*sleepBetweenBackups) * time.Second)
 		}
 
-		err := BackupPvc(ctx, config, namespace, name)
+		err := BackupPvc(ctx, clientset, kclient, dynamicClient, namespace, name)
 		errs = append(errs, err)
 		if err != nil {
 			slog.ErrorContext(ctx, "backup of PVC failed",

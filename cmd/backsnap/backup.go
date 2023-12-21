@@ -17,27 +17,17 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/cli-runtime/pkg/printers"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
 	"kmodules.xyz/client-go/tools/wait"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-func BackupPvc(ctx context.Context, config *rest.Config, namespace, pvcName string) error {
-	scheme := runtime.NewScheme()
-	corev1.AddToScheme(scheme)
-	batchv1.AddToScheme(scheme)
-	volumesnapshotv1.AddToScheme(scheme)
-	clientset := kubernetes.NewForConfigOrDie(config)
-	kclient, err := client.New(config, client.Options{Scheme: scheme})
-	if err != nil {
-		return err
-	}
-
+// Back up a single PVC. Blocks until the backup successfully completed, or returns with an error.
+// TODO: remove clientset and dynamicClient from parameters, and work with only controller-runtime client.
+func BackupPvc(ctx context.Context, clientset kubernetes.Interface, kclient client.Client, dynamicClient dynamic.Interface, namespace, pvcName string) error {
 	backupName := fmt.Sprintf("%s-backup-%s", pvcName, *backupName)
 
 	slog.InfoContext(ctx, "starting backup of pvc",
@@ -51,7 +41,7 @@ func BackupPvc(ctx context.Context, config *rest.Config, namespace, pvcName stri
 	// TODO: this should not be necessary if we have a Backup resource that we can delete (including
 	// foreground propagation), with the snapshot, pvc and Job as child objects
 	waitVolumeSnapshotDeletion := true
-	err = kclient.Delete(ctx, &volumesnapshotv1.VolumeSnapshot{
+	err := kclient.Delete(ctx, &volumesnapshotv1.VolumeSnapshot{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: namespace,
 			Name:      backupName,
@@ -99,19 +89,19 @@ func BackupPvc(ctx context.Context, config *rest.Config, namespace, pvcName stri
 	}
 
 	if waitJobDeletion {
-		if err := waitForDeletion(namespace, "job", backupName, config); err != nil {
+		if err := waitForDeletion(dynamicClient, namespace, "job", backupName); err != nil {
 			return err
 		}
 	}
 
 	if waitPvcDeletion {
-		if err := waitForDeletion(namespace, "pvc", backupName, config); err != nil {
+		if err := waitForDeletion(dynamicClient, namespace, "pvc", backupName); err != nil {
 			return err
 		}
 	}
 
 	if waitVolumeSnapshotDeletion {
-		if err := waitForDeletion(namespace, "volumesnapshot", backupName, config); err != nil {
+		if err := waitForDeletion(dynamicClient, namespace, "volumesnapshot", backupName); err != nil {
 			return err
 		}
 	}
@@ -418,13 +408,13 @@ func BackupPvc(ctx context.Context, config *rest.Config, namespace, pvcName stri
 		return err
 	}
 
-	if err := waitForDeletion(namespace, "job", backupName, config); err != nil {
+	if err := waitForDeletion(dynamicClient, namespace, "job", backupName); err != nil {
 		return err
 	}
-	if err := waitForDeletion(namespace, "pvc", backupName, config); err != nil {
+	if err := waitForDeletion(dynamicClient, namespace, "pvc", backupName); err != nil {
 		return err
 	}
-	if err := waitForDeletion(namespace, "volumesnapshot", backupName, config); err != nil {
+	if err := waitForDeletion(dynamicClient, namespace, "volumesnapshot", backupName); err != nil {
 		return err
 	}
 
@@ -434,7 +424,7 @@ func BackupPvc(ctx context.Context, config *rest.Config, namespace, pvcName stri
 	return nil
 }
 
-func waitForDeletion(namespace, objectType, objectName string, config *rest.Config) error {
+func waitForDeletion(dynamicClient dynamic.Interface, namespace, objectType, objectName string) error {
 	cliConfigFlag := genericclioptions.NewConfigFlags(true)
 	cliConfigFlag.Namespace = &namespace
 
@@ -443,7 +433,7 @@ func waitForDeletion(namespace, objectType, objectName string, config *rest.Conf
 			cliConfigFlag,
 			[]string{objectType + "/" + objectName},
 		),
-		DynamicClient: dynamic.NewForConfigOrDie(config),
+		DynamicClient: dynamicClient,
 		Timeout:       time.Second * 120,
 		Printer:       printers.NewDiscardingPrinter(),
 		ConditionFn:   wait.IsDeleted,
