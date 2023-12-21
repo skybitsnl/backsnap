@@ -17,16 +17,26 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/cli-runtime/pkg/printers"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"kmodules.xyz/client-go/tools/wait"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 func BackupPvc(ctx context.Context, config *rest.Config, namespace, pvcName string) error {
+	scheme := runtime.NewScheme()
+	corev1.AddToScheme(scheme)
+	batchv1.AddToScheme(scheme)
 	clientset := kubernetes.NewForConfigOrDie(config)
+	kclient, err := client.New(config, client.Options{Scheme: scheme})
+	if err != nil {
+		return err
+	}
 	volumesnapshotclient := volumesnapshotclientv1.NewForConfigOrDie(config)
 
 	backupName := fmt.Sprintf("%s-backup-%s", pvcName, *backupName)
@@ -42,7 +52,7 @@ func BackupPvc(ctx context.Context, config *rest.Config, namespace, pvcName stri
 	// TODO: this should not be necessary if we have a Backup resource that we can delete (including
 	// foreground propagation), with the snapshot, pvc and Job as child objects
 	waitVolumeSnapshotDeletion := true
-	err := volumesnapshotclient.VolumeSnapshots(namespace).Delete(ctx, backupName, metav1.DeleteOptions{
+	err = volumesnapshotclient.VolumeSnapshots(namespace).Delete(ctx, backupName, metav1.DeleteOptions{
 		PropagationPolicy: lo.ToPtr(metav1.DeletePropagationBackground),
 	})
 	if errors.IsNotFound(err) {
@@ -53,7 +63,12 @@ func BackupPvc(ctx context.Context, config *rest.Config, namespace, pvcName stri
 	}
 
 	waitJobDeletion := true
-	err = clientset.BatchV1().Jobs(namespace).Delete(ctx, backupName, metav1.DeleteOptions{
+	err = kclient.Delete(ctx, &batchv1.Job{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: namespace,
+			Name:      backupName,
+		},
+	}, &client.DeleteOptions{
 		PropagationPolicy: lo.ToPtr(metav1.DeletePropagationBackground),
 	})
 	if errors.IsNotFound(err) {
@@ -64,7 +79,12 @@ func BackupPvc(ctx context.Context, config *rest.Config, namespace, pvcName stri
 	}
 
 	waitPvcDeletion := true
-	err = clientset.CoreV1().PersistentVolumeClaims(namespace).Delete(ctx, backupName, metav1.DeleteOptions{
+	err = kclient.Delete(ctx, &corev1.PersistentVolumeClaim{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: namespace,
+			Name:      backupName,
+		},
+	}, &client.DeleteOptions{
 		PropagationPolicy: lo.ToPtr(metav1.DeletePropagationBackground),
 	})
 	if errors.IsNotFound(err) {
@@ -175,7 +195,7 @@ func BackupPvc(ctx context.Context, config *rest.Config, namespace, pvcName stri
 	if *volumeClassFlag != "" {
 		volumeClass = volumeClassFlag
 	}
-	backup := corev1.PersistentVolumeClaim{
+	backup := &corev1.PersistentVolumeClaim{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: namespace,
 			Name:      backupName,
@@ -201,14 +221,13 @@ func BackupPvc(ctx context.Context, config *rest.Config, namespace, pvcName stri
 	}
 
 	// TODO: create with retry
-	backupResult, err := clientset.CoreV1().PersistentVolumeClaims(namespace).Create(ctx, &backup, metav1.CreateOptions{})
-	if err != nil {
+	if err := kclient.Create(ctx, backup); err != nil {
 		return err
 	}
 
 	slog.InfoContext(ctx, "created backup PVC",
-		slog.String("name", backupResult.Name),
-		slog.String("namespace", backupResult.Namespace),
+		slog.String("name", backup.Name),
+		slog.String("namespace", backup.Namespace),
 	)
 
 	var imagePullSecrets []corev1.LocalObjectReference
@@ -218,7 +237,7 @@ func BackupPvc(ctx context.Context, config *rest.Config, namespace, pvcName stri
 		})
 	}
 
-	job := batchv1.Job{
+	job := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      backupName,
 			Namespace: namespace,
@@ -279,14 +298,13 @@ func BackupPvc(ctx context.Context, config *rest.Config, namespace, pvcName stri
 	}
 
 	// TODO: create with retry
-	jobResult, err := clientset.BatchV1().Jobs(namespace).Create(ctx, &job, metav1.CreateOptions{})
-	if err != nil {
+	if err := kclient.Create(ctx, job); err != nil {
 		return err
 	}
 
 	slog.InfoContext(ctx, "created backup job",
-		slog.String("name", jobResult.Name),
-		slog.String("namespace", jobResult.Namespace),
+		slog.String("name", job.Name),
+		slog.String("namespace", job.Namespace),
 	)
 
 	// tail the logs for each backup job Pod
@@ -295,20 +313,21 @@ func BackupPvc(ctx context.Context, config *rest.Config, namespace, pvcName stri
 		defer cancel()
 
 		for ctx.Err() == nil {
-			jobResult, err := clientset.BatchV1().Jobs(jobResult.Namespace).Get(ctx, jobResult.Name, metav1.GetOptions{})
-			if err != nil {
+			if err := kclient.Get(ctx, client.ObjectKeyFromObject(job), job); err != nil {
 				return err
 			}
-			if condition, ok := lo.Find(jobResult.Status.Conditions, func(c batchv1.JobCondition) bool { return c.Reason == "BackoffLimitExceeded" }); ok {
+			if condition, ok := lo.Find(job.Status.Conditions, func(c batchv1.JobCondition) bool { return c.Reason == "BackoffLimitExceeded" }); ok {
 				if condition.Status == corev1.ConditionTrue {
 					return fmt.Errorf(condition.Message)
 				}
 			}
 
-			jobPods, err := clientset.CoreV1().Pods(jobResult.Namespace).List(ctx, metav1.ListOptions{
-				LabelSelector: "job-name=" + jobResult.Name,
-			})
+			jobPods := &corev1.PodList{}
+			labelSelector, err := labels.Parse("job-name=" + job.Name)
 			if err != nil {
+				return err
+			}
+			if err := kclient.List(ctx, jobPods, &client.ListOptions{LabelSelector: labelSelector}); err != nil {
 				return err
 			}
 
@@ -322,7 +341,7 @@ func BackupPvc(ctx context.Context, config *rest.Config, namespace, pvcName stri
 			sort.Slice(jobPods.Items, func(i, j int) bool {
 				return jobPods.Items[j].CreationTimestamp.Before(&jobPods.Items[i].CreationTimestamp)
 			})
-			newest := jobPods.Items[0]
+			newest := &jobPods.Items[0]
 
 			if newest.Status.Phase == corev1.PodPending {
 				// pod still pending, wait for a bit
@@ -350,17 +369,16 @@ func BackupPvc(ctx context.Context, config *rest.Config, namespace, pvcName stri
 				// we could read current backup progress
 				line := scanner.Text()
 				slog.InfoContext(ctx, "restic",
-					slog.String("name", jobResult.Name),
-					slog.String("namespace", jobResult.Namespace),
+					slog.String("name", job.Name),
+					slog.String("namespace", job.Namespace),
 					slog.String("output", line),
 				)
 			}
 
-			pod, err := clientset.CoreV1().Pods(newest.Namespace).Get(ctx, newest.Name, metav1.GetOptions{})
-			if err != nil {
+			if err := kclient.Get(ctx, client.ObjectKeyFromObject(newest), newest); err != nil {
 				return err
 			}
-			if pod.Status.Phase == corev1.PodSucceeded {
+			if newest.Status.Phase == corev1.PodSucceeded {
 				break
 			}
 
@@ -373,8 +391,8 @@ func BackupPvc(ctx context.Context, config *rest.Config, namespace, pvcName stri
 	}
 
 	slog.InfoContext(ctx, "backup job succeeded",
-		slog.String("name", jobResult.Name),
-		slog.String("namespace", jobResult.Namespace),
+		slog.String("name", job.Name),
+		slog.String("namespace", job.Namespace),
 	)
 
 	// Clean up
@@ -385,17 +403,15 @@ func BackupPvc(ctx context.Context, config *rest.Config, namespace, pvcName stri
 		return err
 	}
 
-	err = clientset.BatchV1().Jobs(namespace).Delete(ctx, backupName, metav1.DeleteOptions{
+	if err := kclient.Delete(ctx, job, &client.DeleteOptions{
 		PropagationPolicy: lo.ToPtr(metav1.DeletePropagationBackground),
-	})
-	if err != nil {
+	}); err != nil {
 		return err
 	}
 
-	err = clientset.CoreV1().PersistentVolumeClaims(namespace).Delete(ctx, backupName, metav1.DeleteOptions{
+	if err := kclient.Delete(ctx, backup, &client.DeleteOptions{
 		PropagationPolicy: lo.ToPtr(metav1.DeletePropagationBackground),
-	})
-	if err != nil {
+	}); err != nil {
 		return err
 	}
 

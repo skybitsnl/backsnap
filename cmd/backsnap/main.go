@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/samber/lo"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	cruntimeconfig "sigs.k8s.io/controller-runtime/pkg/client/config"
@@ -79,6 +80,7 @@ func main() {
 
 	config := cruntimeconfig.GetConfigOrDie()
 	scheme := runtime.NewScheme()
+	corev1.AddToScheme(scheme)
 	kclient, err := client.New(config, client.Options{Scheme: scheme})
 
 	pvcs, err := SelectPVCsForBackup(ctx, kclient, namespaces, excludeNamespaces)
