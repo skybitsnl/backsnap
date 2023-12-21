@@ -10,7 +10,6 @@ import (
 	"time"
 
 	volumesnapshotv1 "github.com/kubernetes-csi/external-snapshotter/client/v6/apis/volumesnapshot/v1"
-	volumesnapshotclientv1 "github.com/kubernetes-csi/external-snapshotter/client/v6/clientset/versioned/typed/volumesnapshot/v1"
 	"github.com/samber/lo"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -32,12 +31,12 @@ func BackupPvc(ctx context.Context, config *rest.Config, namespace, pvcName stri
 	scheme := runtime.NewScheme()
 	corev1.AddToScheme(scheme)
 	batchv1.AddToScheme(scheme)
+	volumesnapshotv1.AddToScheme(scheme)
 	clientset := kubernetes.NewForConfigOrDie(config)
 	kclient, err := client.New(config, client.Options{Scheme: scheme})
 	if err != nil {
 		return err
 	}
-	volumesnapshotclient := volumesnapshotclientv1.NewForConfigOrDie(config)
 
 	backupName := fmt.Sprintf("%s-backup-%s", pvcName, *backupName)
 
@@ -52,7 +51,12 @@ func BackupPvc(ctx context.Context, config *rest.Config, namespace, pvcName stri
 	// TODO: this should not be necessary if we have a Backup resource that we can delete (including
 	// foreground propagation), with the snapshot, pvc and Job as child objects
 	waitVolumeSnapshotDeletion := true
-	err = volumesnapshotclient.VolumeSnapshots(namespace).Delete(ctx, backupName, metav1.DeleteOptions{
+	err = kclient.Delete(ctx, &volumesnapshotv1.VolumeSnapshot{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: namespace,
+			Name:      backupName,
+		},
+	}, &client.DeleteOptions{
 		PropagationPolicy: lo.ToPtr(metav1.DeletePropagationBackground),
 	})
 	if errors.IsNotFound(err) {
@@ -117,7 +121,7 @@ func BackupPvc(ctx context.Context, config *rest.Config, namespace, pvcName stri
 		snapshotClass = snapshotClassFlag
 	}
 
-	snapshot := volumesnapshotv1.VolumeSnapshot{
+	snapshot := &volumesnapshotv1.VolumeSnapshot{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: namespace,
 			Name:      backupName,
@@ -131,14 +135,13 @@ func BackupPvc(ctx context.Context, config *rest.Config, namespace, pvcName stri
 	}
 
 	// TODO: create with retry
-	result, err := volumesnapshotclient.VolumeSnapshots(namespace).Create(ctx, &snapshot, metav1.CreateOptions{})
-	if err != nil {
+	if err := kclient.Create(ctx, snapshot); err != nil {
 		return err
 	}
 
 	slog.InfoContext(ctx, "created volumesnapshot",
-		slog.String("name", result.Name),
-		slog.String("namespace", result.Namespace),
+		slog.String("name", snapshot.Name),
+		slog.String("namespace", snapshot.Namespace),
 	)
 
 	// TODO: if there is something wrong with this VolumeSnapshot (e.g. no snapshot class is given and there
@@ -172,12 +175,11 @@ func BackupPvc(ctx context.Context, config *rest.Config, namespace, pvcName stri
 		ctx, cancel := context.WithTimeout(ctx, time.Second*60)
 		defer cancel()
 		for ctx.Err() == nil {
-			result, err = volumesnapshotclient.VolumeSnapshots(namespace).Get(ctx, backupName, metav1.GetOptions{})
-			if err != nil {
+			if err := kclient.Get(ctx, client.ObjectKeyFromObject(snapshot), snapshot); err != nil {
 				return err
 			}
 
-			if result.Status != nil && result.Status.ReadyToUse != nil && *result.Status.ReadyToUse == true {
+			if snapshot.Status != nil && snapshot.Status.ReadyToUse != nil && *snapshot.Status.ReadyToUse == true {
 				break
 			}
 
@@ -186,9 +188,9 @@ func BackupPvc(ctx context.Context, config *rest.Config, namespace, pvcName stri
 	}
 
 	slog.InfoContext(ctx, "volumesnapshot is ready!",
-		slog.String("name", result.Name),
-		slog.String("namespace", result.Namespace),
-		slog.String("size", result.Status.RestoreSize.String()),
+		slog.String("name", snapshot.Name),
+		slog.String("namespace", snapshot.Namespace),
+		slog.String("size", snapshot.Status.RestoreSize.String()),
 	)
 
 	var volumeClass *string
@@ -214,7 +216,7 @@ func BackupPvc(ctx context.Context, config *rest.Config, namespace, pvcName stri
 			AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
 			Resources: corev1.VolumeResourceRequirements{
 				Requests: map[corev1.ResourceName]resource.Quantity{
-					corev1.ResourceStorage: *result.Status.RestoreSize,
+					corev1.ResourceStorage: *snapshot.Status.RestoreSize,
 				},
 			},
 		},
@@ -398,10 +400,9 @@ func BackupPvc(ctx context.Context, config *rest.Config, namespace, pvcName stri
 	)
 
 	// Clean up
-	err = volumesnapshotclient.VolumeSnapshots(namespace).Delete(ctx, backupName, metav1.DeleteOptions{
+	if err := kclient.Delete(ctx, snapshot, &client.DeleteOptions{
 		PropagationPolicy: lo.ToPtr(metav1.DeletePropagationBackground),
-	})
-	if err != nil {
+	}); err != nil {
 		return err
 	}
 
