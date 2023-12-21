@@ -119,6 +119,17 @@ func BackupPvc(ctx context.Context, clientset kubernetes.Interface, kclient clie
 		}
 	}
 
+	// Check whether the target PVC exists
+	targetPvc := &corev1.PersistentVolumeClaim{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: namespace,
+			Name:      pvcName,
+		},
+	}
+	if err := kclient.Get(ctx, client.ObjectKeyFromObject(targetPvc), targetPvc); err != nil {
+		return err
+	}
+
 	var snapshotClass *string
 	if settings.SnapshotClass != "" {
 		snapshotClass = &settings.SnapshotClass
@@ -187,6 +198,10 @@ func BackupPvc(ctx context.Context, clientset kubernetes.Interface, kclient clie
 			}
 
 			time.Sleep(time.Second)
+		}
+
+		if ctx.Err() != nil {
+			return ctx.Err()
 		}
 	}
 
