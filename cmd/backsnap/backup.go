@@ -375,14 +375,16 @@ func BackupPvc(ctx context.Context, config *rest.Config, namespace, pvcName stri
 				)
 			}
 
+			// If the scanner is done, the Pod might be done, but not marked as such on the API
+			// yet. Give it a few seconds to settle.
+			time.Sleep(time.Second * 5)
+
 			if err := kclient.Get(ctx, client.ObjectKeyFromObject(newest), newest); err != nil {
 				return err
 			}
 			if newest.Status.Phase == corev1.PodSucceeded {
 				break
 			}
-
-			time.Sleep(time.Second * 5)
 		}
 
 		if ctx.Err() != nil {
