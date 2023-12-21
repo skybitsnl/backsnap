@@ -9,7 +9,8 @@ import (
 	"time"
 
 	"github.com/samber/lo"
-	"k8s.io/client-go/kubernetes"
+	"k8s.io/apimachinery/pkg/runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	cruntimeconfig "sigs.k8s.io/controller-runtime/pkg/client/config"
 )
 
@@ -77,9 +78,10 @@ func main() {
 	ctx := context.Background()
 
 	config := cruntimeconfig.GetConfigOrDie()
-	clientset := kubernetes.NewForConfigOrDie(config)
+	scheme := runtime.NewScheme()
+	kclient, err := client.New(config, client.Options{Scheme: scheme})
 
-	pvcs, err := SelectPVCsForBackup(ctx, clientset, namespaces, excludeNamespaces)
+	pvcs, err := SelectPVCsForBackup(ctx, kclient, namespaces, excludeNamespaces)
 	if err != nil {
 		log.Fatal(err)
 	}

@@ -11,6 +11,7 @@ require (
 require (
 	github.com/Azure/go-ansiterm v0.0.0-20210617225240-d185dfc1b5a1 // indirect
 	github.com/evanphx/json-patch v5.7.0+incompatible // indirect
+	github.com/evanphx/json-patch/v5 v5.7.0 // indirect
 	github.com/go-errors/errors v1.4.2 // indirect
 	github.com/google/btree v1.0.1 // indirect
 	github.com/google/go-cmp v0.6.0 // indirect

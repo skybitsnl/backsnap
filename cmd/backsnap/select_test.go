@@ -10,20 +10,27 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes/fake"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
+
+func removeIgnoreFields(pvcs []corev1.PersistentVolumeClaim) {
+	for i := range pvcs {
+		pvcs[i].ObjectMeta.ResourceVersion = ""
+	}
+}
 
 func TestSelectPVCsForBackup_NoPVCs(t *testing.T) {
 	ctx := context.Background()
-	clientset := fake.NewSimpleClientset()
+	kclient := fake.NewFakeClient()
 
-	pvcs, err := backsnap.SelectPVCsForBackup(ctx, clientset, []string{""}, map[string]struct{}{})
+	pvcs, err := backsnap.SelectPVCsForBackup(ctx, kclient, []string{""}, map[string]struct{}{})
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	var expectedPvcs []corev1.PersistentVolumeClaim
 
+	removeIgnoreFields(pvcs)
 	if diff := deep.Equal(pvcs, expectedPvcs); diff != nil {
 		t.Fatal(diff)
 	}
@@ -31,7 +38,7 @@ func TestSelectPVCsForBackup_NoPVCs(t *testing.T) {
 
 func TestSelectPVCsForBackup_OnePVC(t *testing.T) {
 	ctx := context.Background()
-	clientset := fake.NewSimpleClientset(
+	kclient := fake.NewFakeClient(
 		&corev1.PersistentVolumeClaim{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace: "application",
@@ -49,7 +56,7 @@ func TestSelectPVCsForBackup_OnePVC(t *testing.T) {
 		},
 	)
 
-	pvcs, err := backsnap.SelectPVCsForBackup(ctx, clientset, []string{""}, map[string]struct{}{})
+	pvcs, err := backsnap.SelectPVCsForBackup(ctx, kclient, []string{""}, map[string]struct{}{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -70,6 +77,7 @@ func TestSelectPVCsForBackup_OnePVC(t *testing.T) {
 		},
 	}}
 
+	removeIgnoreFields(pvcs)
 	if diff := deep.Equal(pvcs, expectedPvcs); diff != nil {
 		t.Fatal(diff)
 	}
@@ -77,7 +85,7 @@ func TestSelectPVCsForBackup_OnePVC(t *testing.T) {
 
 func TestSelectPVCsForBackup_IgnoredPVCs(t *testing.T) {
 	ctx := context.Background()
-	clientset := fake.NewSimpleClientset(
+	kclient := fake.NewFakeClient(
 		&corev1.PersistentVolumeClaim{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace: "app1",
@@ -150,6 +158,7 @@ func TestSelectPVCsForBackup_IgnoredPVCs(t *testing.T) {
 				Namespace:         "app1",
 				Name:              "my-storage3",
 				DeletionTimestamp: lo.ToPtr(metav1.Now()),
+				Finalizers:        []string{"fake-finalizer"},
 			},
 			Spec: corev1.PersistentVolumeClaimSpec{
 				StorageClassName: lo.ToPtr("default-sc"),
@@ -163,7 +172,7 @@ func TestSelectPVCsForBackup_IgnoredPVCs(t *testing.T) {
 		},
 	)
 
-	pvcs, err := backsnap.SelectPVCsForBackup(ctx, clientset, []string{"app1", "app2"}, map[string]struct{}{"app2": {}})
+	pvcs, err := backsnap.SelectPVCsForBackup(ctx, kclient, []string{"app1", "app2"}, map[string]struct{}{"app2": {}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -184,6 +193,7 @@ func TestSelectPVCsForBackup_IgnoredPVCs(t *testing.T) {
 		},
 	}}
 
+	removeIgnoreFields(pvcs)
 	if diff := deep.Equal(pvcs, expectedPvcs); diff != nil {
 		t.Fatal(diff)
 	}
