@@ -25,10 +25,23 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
+type BackupSettings struct {
+	BackupName        string
+	SnapshotClass     string
+	VolumeClass       string
+	ImagePullSecret   string
+	Image             string
+	S3Host            string
+	S3Bucket          string
+	S3AccessKeyId     string
+	S3SecretAccessKey string
+	ResticPassword    string
+}
+
 // Back up a single PVC. Blocks until the backup successfully completed, or returns with an error.
 // TODO: remove clientset and dynamicClient from parameters, and work with only controller-runtime client.
-func BackupPvc(ctx context.Context, clientset kubernetes.Interface, kclient client.Client, dynamicClient dynamic.Interface, namespace, pvcName string) error {
-	backupName := fmt.Sprintf("%s-backup-%s", pvcName, *backupName)
+func BackupPvc(ctx context.Context, clientset kubernetes.Interface, kclient client.Client, dynamicClient dynamic.Interface, namespace, pvcName string, settings BackupSettings) error {
+	backupName := fmt.Sprintf("%s-backup-%s", pvcName, settings.BackupName)
 
 	slog.InfoContext(ctx, "starting backup of pvc",
 		slog.String("namespace", namespace),
@@ -107,8 +120,8 @@ func BackupPvc(ctx context.Context, clientset kubernetes.Interface, kclient clie
 	}
 
 	var snapshotClass *string
-	if *snapshotClassFlag != "" {
-		snapshotClass = snapshotClassFlag
+	if settings.SnapshotClass != "" {
+		snapshotClass = &settings.SnapshotClass
 	}
 
 	snapshot := &volumesnapshotv1.VolumeSnapshot{
@@ -184,8 +197,8 @@ func BackupPvc(ctx context.Context, clientset kubernetes.Interface, kclient clie
 	)
 
 	var volumeClass *string
-	if *volumeClassFlag != "" {
-		volumeClass = volumeClassFlag
+	if settings.VolumeClass != "" {
+		volumeClass = &settings.VolumeClass
 	}
 	backup := &corev1.PersistentVolumeClaim{
 		ObjectMeta: metav1.ObjectMeta{
@@ -223,9 +236,9 @@ func BackupPvc(ctx context.Context, clientset kubernetes.Interface, kclient clie
 	)
 
 	var imagePullSecrets []corev1.LocalObjectReference
-	if *imagePullSecret != "" {
+	if settings.ImagePullSecret != "" {
 		imagePullSecrets = append(imagePullSecrets, corev1.LocalObjectReference{
-			Name: *imagePullSecret,
+			Name: settings.ImagePullSecret,
 		})
 	}
 
@@ -251,7 +264,7 @@ func BackupPvc(ctx context.Context, clientset kubernetes.Interface, kclient clie
 					}},
 					Containers: []corev1.Container{{
 						Name:            "default",
-						Image:           *image,
+						Image:           settings.Image,
 						ImagePullPolicy: "Always",
 						Env: []corev1.EnvVar{{
 							Name:  "BACKUP_NAMESPACE",
@@ -261,16 +274,16 @@ func BackupPvc(ctx context.Context, clientset kubernetes.Interface, kclient clie
 							Value: backupName,
 						}, {
 							Name:  "RESTIC_REPOSITORY_BASE",
-							Value: "s3:" + *s3Host + "/" + *s3Bucket,
+							Value: "s3:" + settings.S3Host + "/" + settings.S3Bucket,
 						}, {
 							Name:  "RESTIC_PASSWORD",
-							Value: *resticPassword,
+							Value: settings.ResticPassword,
 						}, {
 							Name:  "AWS_ACCESS_KEY_ID",
-							Value: *s3AccessKeyId,
+							Value: settings.S3AccessKeyId,
 						}, {
 							Name:  "AWS_SECRET_ACCESS_KEY",
-							Value: *s3SecretAccessKey,
+							Value: settings.S3SecretAccessKey,
 						}, {
 							Name:  "RESTIC_HOSTNAME",
 							Value: "$(BACKUP_NAMESPACE)",

@@ -114,7 +114,18 @@ func main() {
 			time.Sleep(time.Duration(*sleepBetweenBackups) * time.Second)
 		}
 
-		err := BackupPvc(ctx, clientset, kclient, dynamicClient, namespace, name)
+		err := BackupPvc(ctx, clientset, kclient, dynamicClient, namespace, name, BackupSettings{
+			BackupName:        *backupName,
+			SnapshotClass:     *snapshotClassFlag,
+			VolumeClass:       *volumeClassFlag,
+			ImagePullSecret:   *imagePullSecret,
+			Image:             *image,
+			S3Host:            *s3Host,
+			S3Bucket:          *s3Bucket,
+			S3AccessKeyId:     *s3AccessKeyId,
+			S3SecretAccessKey: *s3SecretAccessKey,
+			ResticPassword:    *resticPassword,
+		})
 		errs = append(errs, err)
 		if err != nil {
 			slog.ErrorContext(ctx, "backup of PVC failed",
