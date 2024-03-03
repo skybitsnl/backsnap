@@ -1,0 +1,24 @@
+name: Run against Minikube
+on:
+  - push
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - uses: actions/setup-go@v3
+      with:
+        go-version-file: 'go.mod'
+        cache: true
+    - name: go build
+      run:
+        go build ./...
+    - name: Start minikube
+      uses: medyagh/setup-minikube@latest
+      with:
+        addons: volumesnapshots,csi-hostpath-driver
+    - name: Minikube version
+      run: kubectl version
+    - name: Run tests
+      run:
+        make test
