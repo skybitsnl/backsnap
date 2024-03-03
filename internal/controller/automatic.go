@@ -114,7 +114,7 @@ func (r *AutomaticPVCBackupCreator) Reconcile(ctx context.Context, req ctrl.Requ
 	if nextBackup.After(time.Now()) {
 		return ctrl.Result{
 			Requeue:      true,
-			RequeueAfter: nextBackup.Sub(time.Now()),
+			RequeueAfter: time.Until(nextBackup),
 		}, nil
 	}
 
@@ -145,7 +145,7 @@ func (r *AutomaticPVCBackupCreator) Reconcile(ctx context.Context, req ctrl.Requ
 	nextBackup = parsedSchedule.Next(newBackup.CreationTimestamp.Time)
 	return ctrl.Result{
 		Requeue:      true,
-		RequeueAfter: nextBackup.Sub(time.Now()),
+		RequeueAfter: time.Until(nextBackup),
 	}, nil
 }
 

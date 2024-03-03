@@ -15,10 +15,11 @@ type Clock interface {
 }
 
 type BackupSettings struct {
-	SnapshotClass     string
-	VolumeClass       string
-	ImagePullSecret   string
-	Image             string
+	SnapshotClass   string
+	VolumeClass     string
+	ImagePullSecret string
+	Image           string
+	// S3 hostname (can be host, host:port or http://host:port/)
 	S3Host            string
 	S3Bucket          string
 	S3AccessKeyId     string

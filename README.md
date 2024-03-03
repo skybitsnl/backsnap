@@ -121,3 +121,21 @@ go run ./cmd \
 This will use your local credentials to access the cluster and create resources.
 Of course, if you simply have a `backsnap` binary, just run it as `backsnap
 -s3-host ...`.
+
+## Running the tests
+
+The tests require a Kubernetes cluster that can run Pods, but does not run the
+backsnap operator. That means envtest, the typical unit test framework, won't
+work. Instead, you can run the tests against minikube.
+
+```
+minikube start --driver=docker --addons=volumesnapshots,csi-hostpath-driver
+make test
+```
+
+The first minikube command starts minikube, adds it as a context to kubectl, and
+sets it as the active context, so that every kubectl command after it uses
+minikube.  You can use `kubectl config get-contexts` to see your configured
+contexts, and can switch to the existing one you had using `kubectl config
+use-context NAME`. Then, you can switch back using `kubectl config use-context
+minikube` in order to run the tests again.

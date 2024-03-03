@@ -44,7 +44,7 @@ var (
 	volumeClassFlag   = flag.String("volumeclass", "", "volumeClassName")
 	imagePullSecret   = flag.String("imagepullsecret", "", "imagePullSecret to pass to backup Pod (optional)")
 	image             = flag.String("image", "sjorsgielen/backsnap-restic:latest-main", "Restic back-up image")
-	s3Host            = flag.String("s3-host", "", "S3 hostname")
+	s3Host            = flag.String("s3-host", "", "S3 hostname (can be host, host:port or http://host:port/)")
 	s3Bucket          = flag.String("s3-bucket", "", "S3 bucket")
 	s3AccessKeyId     = flag.String("s3-access-key-id", "", "S3 access key ID")
 	s3SecretAccessKey = flag.String("s3-secret-access-key", "", "S3 secret access key")
