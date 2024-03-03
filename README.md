@@ -1,5 +1,7 @@
 # backsnap - a kubernetes backup operator
 
+*Backsnap: kubernetes backups, chiropractor approved!*
+
 Backsnap helps performing off-site backups of persistent volumes in a Kubernetes
 cluster, for use in your disaster recovery scenarios. It works by enumerating
 all PersistentVolumeClaims in your cluster, taking a point-in-time
@@ -10,34 +12,24 @@ which is important when backing up workloads such as databases. By using
 `restic`, we automatically support all its features, such as restoring from a
 point in history, client-side encryption and multiple storage backends.
 
-Currently, Backsnap is a single utility which performs a one-off back-up of one
-or more (or all) namespaces. You can run it locally as such, or use it in a
-Kubernetes CronJob to back up all PVCs in your cluster at pre-scheduled moments.
+The operator can run in automatic or manual mode. In manual mode (`-manual`
+flag), you create PVCBackup objects in the same namespace as a PVC you want to
+be backed up. The operator reacts to this by creating a snapshot, a
+point-in-time PVC and a Job to perform the backup, and cleans up afterwards. In
+automatic mode, the operator creates PVCBackup objects automatically according
+to schedule.
 
-Later, the tool will evolve into an operator so that you can set individual
-schedules per PVC if you want.
+The automatic schedule can be adjusted using a `backsnap.skyb.it/schedule`
+annotation on the target PVC or target namespace. By setting the annotation to
+the empty string, the PVC (or all PVCs in the namespace) are not backed up. If
+both the PVC and namespace have no annotation, the default schedule from the
+`-schedule` flag is used. You can set `-schedule=""` to disable automatic
+backups (this is the same as setting `-manual`, unless any PVCs or
+namespaces do have a schedule set).
 
-## How to use it locally
+## Getting started
 
-You can run `go run ./cmd/backsnap -help` to get a list of flags. Example run:
-
-```
-go run ./cmd/backsnap \
-    -s3-host s3.eu-west-1.amazonaws.com \
-    -s3-bucket backsnap-example \
-    -s3-access-key-id ... \
-    -s3-secret-access-key ... \
-    -restic-password ...
-```
-
-This will use your local credentials to access the cluster and create resources.
-Of course, if you simply have a `backsnap` binary, just run it as `backsnap
--s3-host ...`.
-
-## How to run it in Kubernetes
-
-You can also run backsnap inside Kubernetes. It will use the Service Account of
-its Pod to access the cluster. First, create a `backsnap` namespace:
+First, create a `backsnap` namespace:
 
 ```
 kubectl create namespace backsnap
@@ -57,55 +49,75 @@ and the set of necessary ClusterRole rules will be significantly reduced.
 kubectl apply -f sa.yaml
 ```
 
-Then, the following cronjob will create a daily backup of your cluster. Note
-that if you want to do backups more often than daily, you need to make sure your
-backup name (`backupname` flag) is periodically repeating, but unique for each
-moment. For example, for a twice-per-day backup, set `-backupname` to
-`monday-morning` then `morning-afternoon`. If you do this, any failed backup
-resources will automatically be cleaned up by the next run with that name, e.g.
-a week later. This will no longer be necessary once the tool becomes an
-operator.
+Then, install the CRDs into your cluster:
 
 ```
-apiVersion: batch/v1
-kind: CronJob
+make install
+```
+
+Then, deploy the operator.
+
+```
+make deploy IMG=sjorsgielen/backsnap:latest-main
+```
+
+If you want to build and deploy your own operator, use something like:
+
+```
+make docker-build docker-push deploy IMG=<some-registry>/backsnap:latest-main
+````
+
+These commands deploy an operator in "manual" mode by default, since the manager
+YAMLs in `config/manager` pass `-schedule ""` in the args. So, if you deploy this
+way, the operator will not start backing up anything, unless schedules are set in
+namespaces and PVCs annotations. To run in full backup mode, remove
+`-schedule ""` from the args (or set a specific schedule, e.g. `-schedule "@daily"`)
+when you deploy the manager.
+
+In manual mode, you can tell the operator to start the backup of a specific PVC by
+submitting a CR like the one in `config/samples/backsnap_v1alpha1_pvcbackup.yaml`:
+
+```
+apiVersion: backsnap.skyb.it/v1alpha1
+kind: PVCBackup
 metadata:
-  namespace: backsnap
-  name: backsnap
+  name: your-data-backup
+  namespace: your-application
 spec:
-  schedule: "12 4 * * *"
-  jobTemplate:
-    spec:
-      template:
-        spec:
-          serviceAccountName: backsnap
-          containers:
-          - name: default
-            image: sjorsgielen/backsnap:latest-main
-            imagePullPolicy: Always
-            args:
-            - -s3-host
-            - s3.eu-west-1.amazonaws.com
-            - -s3-bucket
-            - backsnap-example
-            - -s3-access-key-id
-            - ...
-            - -s3-secret-access-key
-            - ...
-            - -restic-password
-            - ...
-          restartPolicy: OnFailure
+  pvc: your-data
+  ttl: 1h
 ```
 
-To run your first back-up immediately, run:
+## To uninstall
+
+Delete the CRDs from the cluster:
+
+```sh
+make uninstall
+```
+
+Undeploy the controller from the cluster:
+
+```sh
+make undeploy
+```
+
+## How to run it locally
+
+You can run `go run ./cmd/backsnap -help` to get a list of flags. Example run:
 
 ```
-kubectl create job -n backsnap --from=cronjob/backsnap backsnap-manual
+go run ./cmd \
+    -snapshotclass ... \
+    -namespaces ... \
+    -schedule "@daily" \
+    -s3-host s3.eu-west-1.amazonaws.com \
+    -s3-bucket backsnap-example \
+    -s3-access-key-id ... \
+    -s3-secret-access-key ... \
+    -restic-password ...
 ```
 
-This will create a first backup Job + Pod in the `backsnap` namespace. Tail its
-logs to follow the backup process:
-
-```
-kubectl logs -f -n backsnap job/backsnap-manual
-```
+This will use your local credentials to access the cluster and create resources.
+Of course, if you simply have a `backsnap` binary, just run it as `backsnap
+-s3-host ...`.

@@ -1,0 +1,4 @@
+## Append samples of your project ##
+resources:
+- backsnap_v1alpha1_pvcbackup.yaml
+#+kubebuilder:scaffold:manifestskustomizesamples

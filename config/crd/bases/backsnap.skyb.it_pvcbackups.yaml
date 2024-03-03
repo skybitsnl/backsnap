@@ -1,0 +1,64 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.13.0
+  name: pvcbackups.backsnap.skyb.it
+spec:
+  group: backsnap.skyb.it
+  names:
+    kind: PVCBackup
+    listKind: PVCBackupList
+    plural: pvcbackups
+    singular: pvcbackup
+  scope: Namespaced
+  versions:
+  - name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: PVCBackup is the Schema for the pvcbackups API
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation
+              of an object. Servers should convert recognized schemas to the latest
+              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this
+              object represents. Servers may infer this from the endpoint the client
+              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          spec:
+            properties:
+              pvc:
+                description: Name of the PVC to back up. Must be in the same namespace.
+                type: string
+              ttl:
+                description: How long will the backup object be retained after the
+                  backup completes. If not set, the object will be retained for at
+                  least one day. The controller will also always keep the last PVCBackup
+                  for a particular PVC around, so that it knows when the last backup
+                  was completed.
+                type: string
+            required:
+            - pvc
+            type: object
+          status:
+            properties:
+              finishedAt:
+                format: date-time
+                type: string
+              result:
+                enum:
+                - Succeeded
+                - Failed
+                type: string
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
