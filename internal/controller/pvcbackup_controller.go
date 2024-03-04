@@ -70,7 +70,7 @@ func (r *PVCBackupReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 			// ignore not-found errors since we don't need to create any PVCBackup for those
 			return ctrl.Result{}, nil
 		}
-		logger.ErrorContext(ctx, "unable to fetch PVC", slog.Any("err", err))
+		logger.ErrorContext(ctx, "unable to fetch PVCBackup", slog.Any("err", err))
 		return ctrl.Result{}, err
 	}
 

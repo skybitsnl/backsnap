@@ -3,7 +3,8 @@ package controller
 import "time"
 
 var (
-	BackupScheduleAnnotation = "backsnap.skyb.it/schedule"
+	BackupScheduleAnnotation     = "backsnap.skyb.it/schedule"
+	CurrentlyRestoringAnnotation = "backsnap.skyb.it/restoring"
 )
 
 type realClock struct{}

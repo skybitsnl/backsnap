@@ -2,6 +2,7 @@ package controller
 
 import (
 	"context"
+	"io"
 	"net"
 	"os"
 	"os/exec"
@@ -17,14 +18,17 @@ import (
 	"github.com/skybitsnl/backsnap/api/v1alpha1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	cruntimeconfig "sigs.k8s.io/controller-runtime/pkg/client/config"
 )
 
-var _ = Describe("PVCBackup controller", func() {
+var _ = Describe("PVCBackup and PVCRestore controller", func() {
 	var storageClassName string
 	if sc, ok := os.LookupEnv("STORAGE_CLASS_NAME"); ok && len(sc) > 0 {
 		storageClassName = sc
@@ -135,24 +139,34 @@ var _ = Describe("PVCBackup controller", func() {
 		})
 		Expect(err).ToNot(HaveOccurred())
 
+		backupSettings := BackupSettings{
+			SnapshotClass: snapshotClassName,
+			VolumeClass:   storageClassName,
+			// default restic image
+			ImagePullSecret: "",
+			Image:           "sjorsgielen/backsnap-restic:latest-main",
+			// MinIO we just set up
+			S3Host:            "http://minio:9000",
+			S3Bucket:          mbucket,
+			S3AccessKeyId:     "minioadmin",
+			S3SecretAccessKey: "minioadmin",
+			// any restic password
+			ResticPassword: "resticpass",
+		}
+
 		err = (&PVCBackupReconciler{
-			Client:     k8sManager.GetClient(),
-			Scheme:     k8sManager.GetScheme(),
-			Namespaces: []string{namespace},
-			BackupSettings: BackupSettings{
-				SnapshotClass: snapshotClassName,
-				VolumeClass:   storageClassName,
-				// default restic image
-				ImagePullSecret: "",
-				Image:           "sjorsgielen/backsnap-restic:latest-main",
-				// MinIO we just set up
-				S3Host:            "http://minio:9000",
-				S3Bucket:          mbucket,
-				S3AccessKeyId:     "minioadmin",
-				S3SecretAccessKey: "minioadmin",
-				// any restic password
-				ResticPassword: "resticpass",
-			},
+			Client:         k8sManager.GetClient(),
+			Scheme:         k8sManager.GetScheme(),
+			Namespaces:     []string{namespace},
+			BackupSettings: backupSettings,
+		}).SetupWithManager(k8sManager)
+		Expect(err).ToNot(HaveOccurred())
+
+		err = (&PVCRestoreReconciler{
+			Client:         k8sManager.GetClient(),
+			Scheme:         k8sManager.GetScheme(),
+			Namespaces:     []string{namespace},
+			BackupSettings: backupSettings,
 		}).SetupWithManager(k8sManager)
 		Expect(err).ToNot(HaveOccurred())
 
@@ -249,6 +263,8 @@ var _ = Describe("PVCBackup controller", func() {
 				return backup.Status.FinishedAt != nil && !backup.Status.FinishedAt.IsZero()
 			}, time.Minute, time.Second).Should(BeTrue())
 
+			Expect(*backup.Status.Result).To(BeEquivalentTo("Succeeded"))
+
 			By("the S3 volume should contain a single snapshot")
 			prefix := namespace + "/my-data/snapshots"
 			var snapshots []string
@@ -261,6 +277,96 @@ var _ = Describe("PVCBackup controller", func() {
 			}
 			Expect(snapshots).To(HaveLen(1))
 			Expect(snapshots[0]).ToNot(HaveLen(0))
+
+			By("deleting the original backup object, PVC and job")
+			Expect(k8sClient.Delete(ctx, backup)).Should(Succeed())
+			Expect(k8sClient.Delete(ctx, pvc, &client.DeleteOptions{
+				PropagationPolicy: lo.ToPtr(metav1.DeletePropagationForeground),
+			})).Should(Succeed())
+			Expect(k8sClient.Delete(ctx, job, &client.DeleteOptions{
+				PropagationPolicy: lo.ToPtr(metav1.DeletePropagationForeground),
+			})).Should(Succeed())
+
+			Eventually(func() bool {
+				return apierrors.IsNotFound(k8sClient.Get(ctx, client.ObjectKeyFromObject(pvc), pvc))
+			}, time.Minute, time.Second).Should(BeTrue())
+
+			By("creating a PVCRestore object")
+			restore := &v1alpha1.PVCRestore{
+				ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: "my-restore"},
+				Spec: v1alpha1.PVCRestoreSpec{
+					SourcePVC:       "my-data",
+					SourceNamespace: namespace,
+					SourceSnapshot:  "latest",
+					TargetPVC:       "",
+					TargetPVCSize:   resource.MustParse("1Gi"),
+				},
+			}
+			Expect(k8sClient.Create(ctx, restore)).Should(Succeed())
+
+			Eventually(func() bool {
+				Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(restore), restore)).Should(Succeed())
+
+				return restore.Status.FinishedAt != nil && !restore.Status.FinishedAt.IsZero()
+			}, time.Minute, time.Second).Should(BeTrue())
+
+			Expect(*restore.Status.Result).To(BeEquivalentTo("Succeeded"))
+
+			By("dumping the contents")
+			pod := &corev1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "data-printer",
+					Namespace: namespace,
+				},
+				Spec: corev1.PodSpec{
+					RestartPolicy: corev1.RestartPolicyOnFailure,
+					Volumes: []corev1.Volume{{
+						Name: "data",
+						VolumeSource: corev1.VolumeSource{
+							PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
+								ClaimName: "my-data",
+								ReadOnly:  true,
+							},
+						},
+					}},
+					Containers: []corev1.Container{{
+						Name:  "default",
+						Image: "ubuntu:jammy",
+						Command: []string{
+							"/bin/bash", "-c", "cat /data/foo.txt",
+						},
+						Env: []corev1.EnvVar{},
+						VolumeMounts: []corev1.VolumeMount{{
+							Name:      "data",
+							ReadOnly:  true,
+							MountPath: "/data",
+						}},
+					}},
+				},
+			}
+			Expect(k8sClient.Create(ctx, pod)).Should(Succeed())
+
+			Eventually(func() bool {
+				Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(pod), pod)).Should(Succeed())
+
+				return pod.Status.Phase == corev1.PodSucceeded
+			}, time.Minute, time.Second).Should(BeTrue())
+
+			// TODO: retrieve container logs using controller-runtime
+			// https://github.com/kubernetes-sigs/controller-runtime/issues/452
+			config := cruntimeconfig.GetConfigOrDie()
+			clientset := kubernetes.NewForConfigOrDie(config)
+			req := clientset.CoreV1().Pods(namespace).GetLogs(pod.ObjectMeta.Name, &corev1.PodLogOptions{
+				Container: "default",
+				Follow:    true,
+			})
+			logs, err := req.Stream(ctx)
+			Expect(err).ToNot(HaveOccurred())
+			defer logs.Close()
+			bytes, err := io.ReadAll(logs)
+			Expect(err).ToNot(HaveOccurred())
+
+			Expect(string(bytes)).To(Equal("Hello World!\n"))
 		})
 	})
 })

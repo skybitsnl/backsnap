@@ -139,3 +139,42 @@ minikube.  You can use `kubectl config get-contexts` to see your configured
 contexts, and can switch to the existing one you had using `kubectl config
 use-context NAME`. Then, you can switch back using `kubectl config use-context
 minikube` in order to run the tests again.
+
+## Security considerations
+
+This operator assumes full trust within the entire Kubernetes cluster. Because
+of existing Kubernetes limitations, security risks are difficult to mitigate.
+
+Once
+[cross-namespace data sources](https://kubernetes.io/blog/2023/01/02/cross-namespace-data-sources-alpha/)
+are beta in Kubernetes, this application will also optionally support them. This
+will mitigate security risks to a point where absolute trust in anyone using the
+cluster is no longer necessary.
+
+### While making back-ups
+
+This operator creates a point-in-time copy of the PVC to back up. This has to be
+done in the same namespace, because snapshots cannot be taken or restored into
+other namespaces. Theoretically, this PVC could be read from and written to by
+anyone who can read/write PVCs in the target namespace, before the back-up
+starts. But since such parties can typically also read/write the target PVC
+itself, this is relatively low-risk.
+
+Of a higher risk, this operator creates a Pod inside the target namespace which
+consumes the PVC copy and backs it up to the backup location using restic. This
+Pod contains the S3 credentials and the restic encryption password in its YAML.
+Anyone who can read Job or Pod definitions, or exec into Pods, can read these
+credentials and therefore read and write the back-ups.
+
+### While keeping back-ups
+
+The restic password is used for client-side encryption. This means that the
+back-ups cannot be retrieved from the target location without also knowing the
+decryption password. This is a feature provided by restic.
+
+### While restoring back-ups
+
+A PVCRestore object can be created in any namespace watched by the operator, and
+will be able to restore any PVC from any namespace backed up on the same backup
+location. This means that any user with access to any namespace on the cluster,
+can eventually read the contents of any PVC in any other namespace.
