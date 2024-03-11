@@ -17,8 +17,9 @@ of the snapshot.
 
 By using VolumeSnapshots we are certain that a backup is internally consistant,
 which is important when backing up workloads such as databases. By using
-`restic`, we automatically support all its features, such as restoring from a
-point in history, client-side encryption and multiple storage backends.
+`restic` the backups are incremental and we automatically support all its
+features, such as restoring from a point in history, client-side encryption and
+multiple storage backends.
 
 The operator can run in automatic or manual mode. In manual mode (`-manual`
 flag), you create PVCBackup objects in the same namespace as a PVC you want to
