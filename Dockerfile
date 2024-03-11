@@ -12,7 +12,7 @@ COPY go.sum go.sum
 RUN go mod download
 
 # Copy the go source
-COPY cmd/backsnap cmd/backsnap
+COPY cmd/ cmd/
 COPY api/ api/
 COPY internal/controller/ internal/controller/
 

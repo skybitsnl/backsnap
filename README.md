@@ -104,7 +104,7 @@ make undeploy
 
 ## How to run it locally
 
-You can run `go run ./cmd/backsnap -help` to get a list of flags. Example run:
+You can run `go run ./cmd -help` to get a list of flags. Example run:
 
 ```
 go run ./cmd \
