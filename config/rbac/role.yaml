@@ -31,6 +31,32 @@ rules:
   - patch
   - update
 - apiGroups:
+  - backsnap.skyb.it
+  resources:
+  - pvcrestores
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - backsnap.skyb.it
+  resources:
+  - pvcrestores/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - backsnap.skyb.it
+  resources:
+  - pvcrestores/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
   - batch
   resources:
   - jobs

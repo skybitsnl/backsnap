@@ -12,7 +12,7 @@ jobs:
 
     - name: ensure that files are properly generated
       run: |
-        make manifests generate
+        make
         if [ "$(git status --porcelain=v1 2>/dev/null | wc -l)" != "0" ]; then
           echo "error: Makefile caused changes"
           git status
