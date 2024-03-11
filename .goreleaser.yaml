@@ -23,6 +23,8 @@ dockers:
     build_flag_templates:
     - "--pull"
     - "--platform=linux/amd64"
+    extra_files:
+    - "restic.sh"
   - image_templates:
     - 'sjorsgielen/backsnap-restic:latest-arm64'
     - 'sjorsgielen/backsnap-restic:{{ .Tag }}-arm64'
@@ -32,6 +34,8 @@ dockers:
     - "--pull"
     - "--platform=linux/arm64"
     goarch: arm64
+    extra_files:
+    - "restic.sh"
   - image_templates:
     - 'sjorsgielen/backsnap:latest-amd64'
     - 'sjorsgielen/backsnap:{{ .Tag }}-amd64'

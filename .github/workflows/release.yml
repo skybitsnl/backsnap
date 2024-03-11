@@ -12,10 +12,11 @@ permissions:
   # issues: write
 
 jobs:
-  test:
+  e2e:
     uses: ./.github/workflows/e2e.yml
 
   goreleaser:
+    needs: e2e
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
