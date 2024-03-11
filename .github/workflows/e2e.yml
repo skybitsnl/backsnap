@@ -5,14 +5,28 @@ jobs:
   e2e:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
-    - uses: actions/setup-go@v3
+    - uses: actions/checkout@v4
+    - uses: actions/setup-go@v5
       with:
         go-version-file: 'go.mod'
-        cache: true
+
+    - name: ensure that files are properly generated
+      run:
+        make manifests generate
+        if [ "$(git status --porcelain=v1 2>/dev/null | wc -l)" != "0" ]; then
+          echo "error: Makefile caused changes"
+          git status
+          exit 1
+        fi
+
     - name: go build
       run:
         go build ./...
+
+    - name: make fmt vet lint
+      run:
+        make fmt vet lint
+
     - name: Start minikube
       uses: medyagh/setup-minikube@latest
       with:
