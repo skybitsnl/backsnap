@@ -3,9 +3,17 @@
 *Backsnap: kubernetes backups, chiropractor approved!*
 
 Backsnap helps performing off-site backups of persistent volumes in a Kubernetes
-cluster, for use in your disaster recovery scenarios. It works by enumerating
-all PersistentVolumeClaims in your cluster, taking a point-in-time
-VolumeSnapshot of them, then using `restic` to take a backup of the snapshot.
+cluster, for use in your disaster recovery scenarios.
+
+Backsnap by default assumes that all PVCs in your cluster should be backed up.
+No per-PVC object is necessary to start backing up any data. You can change this
+per PVC, per namespace or in operator configuration.
+
+## How does it work?
+
+By default, Backsnap enumerates all PersistentVolumeClaims in your cluster,
+takes a point-in-time VolumeSnapshot of them, and uses `restic` to take a backup
+of the snapshot.
 
 By using VolumeSnapshots we are certain that a backup is internally consistant,
 which is important when backing up workloads such as databases. By using
@@ -25,17 +33,24 @@ the empty string, the PVC (or all PVCs in the namespace) are not backed up. If
 both the PVC and namespace have no annotation, the default schedule from the
 `-schedule` flag is used. You can set `-schedule=""` to disable automatic
 backups (this is the same as setting `-manual`, unless any PVCs or
-namespaces do have a schedule set).
+namespaces do have an overriding schedule set).
 
 ## Getting started
 
-First, create a `backsnap` namespace:
+First, import the Backsnap CRDs:
+
+```
+kubectl apply -f https://raw.githubusercontent.com/skybitsnl/backsnap/main/config/crd/bases/backsnap.skyb.it_pvcbackups.yaml
+kubectl apply -f https://raw.githubusercontent.com/skybitsnl/backsnap/main/config/crd/bases/backsnap.skyb.it_pvcrestores.yaml
+```
+
+Then, create a `backsnap` namespace where the operator will run:
 
 ```
 kubectl create namespace backsnap
 ```
 
-Then, create the Service Account and its required roles. The file below creates
+Then, create the Service Account and its required roles. The files below create
 a ClusterRole which allows creating VolumeSnapshots, PersistentVolumeClaims and
 Jobs in any namespace, and allows reading various other resources. If you're
 just backing up a single namespace, you can tweak this file to create a Role
@@ -46,33 +61,44 @@ are beta in Kubernetes, this application will also optionally support them,
 and the set of necessary ClusterRole rules will be significantly reduced.
 
 ```
-kubectl apply -f sa.yaml
+kubectl apply -f https://raw.githubusercontent.com/skybitsnl/backsnap/main/config/rbac/role.yaml
+kubectl apply -f https://raw.githubusercontent.com/skybitsnl/backsnap/main/config/rbac/role_binding.yaml
+kubectl apply -f https://raw.githubusercontent.com/skybitsnl/backsnap/main/config/rbac/leader_election_role.yaml
+kubectl apply -f https://raw.githubusercontent.com/skybitsnl/backsnap/main/config/rbac/leader_election_role_binding.yaml
+kubectl apply -f https://raw.githubusercontent.com/skybitsnl/backsnap/main/config/rbac/service_account.yaml
 ```
 
-Then, install the CRDs into your cluster:
+Then, we can deploy the operator.
+
+> [!CAUTION]
+> Note that depending on your operator configuration, Backsnap may start to take
+> back-ups of all PVCs in your cluster immediately. If you don't want this to
+> happen (yet), you can enable manual mode using the `-manual` flag. Eventually,
+> we recommend running Backsnap in its default mode. This ensures that you have at
+> least a daily snapshot of all PVCs in your cluster, even new ones, unless you
+> opt out explicitly.
+
+We download the Deployment YAML, so that we can edit its default configuration before
+starting it.
 
 ```
-make install
+wget https://raw.githubusercontent.com/skybitsnl/backsnap/main/config/manager/manager.yaml
 ```
 
-Then, deploy the operator.
+Edit the manager.yaml and adjust as necessary.
+
+- The version by default is set to `latest`, you may want to choose a specific tag here
+  to prevent automatic updating.
+- See the args inside the default YAML for any configuration you may want to set.
+
+Then, deploy it:
 
 ```
-make deploy IMG=sjorsgielen/backsnap:latest-main
+kubectl apply -f manager.yaml
 ```
 
-If you want to build and deploy your own operator, use something like:
-
-```
-make docker-build docker-push deploy IMG=<some-registry>/backsnap:latest-main
-````
-
-These commands deploy an operator in "manual" mode by default, since the manager
-YAMLs in `config/manager` pass `-schedule ""` in the args. So, if you deploy this
-way, the operator will not start backing up anything, unless schedules are set in
-namespaces and PVCs annotations. To run in full backup mode, remove
-`-schedule ""` from the args (or set a specific schedule, e.g. `-schedule "@daily"`)
-when you deploy the manager.
+In automatic mode, PVCBackup objects will be created immediately. You can list them
+using `kubectl get pvcbackup -A` and in the logs of the operator.
 
 In manual mode, you can tell the operator to start the backup of a specific PVC by
 submitting a CR like the one in `config/samples/backsnap_v1alpha1_pvcbackup.yaml`:
@@ -88,57 +114,22 @@ spec:
   ttl: 1h
 ```
 
+You'll see that a VolumeSnapshot, PVC and backup Job are created in the
+`your-application` namespace and you can follow along with the operator logs to
+see its progression.
+
 ## To uninstall
 
-Delete the CRDs from the cluster:
+Stop the manager, the namespace, cluster roles and the CRDs created above:
 
 ```sh
-make uninstall
+kubectl delete deployment -n backsnap backsnap-operator
+kubectl delete namespace backsnap
+kubectl delete clusterrole backsnap-manager
+
+kubectl delete -f https://raw.githubusercontent.com/skybitsnl/backsnap/main/config/crd/bases/backsnap.skyb.it_pvcbackups.yaml
+kubectl delete -f https://raw.githubusercontent.com/skybitsnl/backsnap/main/config/crd/bases/backsnap.skyb.it_pvcrestores.yaml
 ```
-
-Undeploy the controller from the cluster:
-
-```sh
-make undeploy
-```
-
-## How to run it locally
-
-You can run `go run ./cmd -help` to get a list of flags. Example run:
-
-```
-go run ./cmd \
-    -snapshotclass ... \
-    -namespaces ... \
-    -schedule "@daily" \
-    -s3-host s3.eu-west-1.amazonaws.com \
-    -s3-bucket backsnap-example \
-    -s3-access-key-id ... \
-    -s3-secret-access-key ... \
-    -restic-password ...
-```
-
-This will use your local credentials to access the cluster and create resources.
-Of course, if you simply have a `backsnap` binary, just run it as `backsnap
--s3-host ...`.
-
-## Running the tests
-
-The tests require a Kubernetes cluster that can run Pods, but does not run the
-backsnap operator. That means envtest, the typical unit test framework, won't
-work. Instead, you can run the tests against minikube.
-
-```
-minikube start --driver=docker --addons=volumesnapshots,csi-hostpath-driver
-make test
-```
-
-The first minikube command starts minikube, adds it as a context to kubectl, and
-sets it as the active context, so that every kubectl command after it uses
-minikube.  You can use `kubectl config get-contexts` to see your configured
-contexts, and can switch to the existing one you had using `kubectl config
-use-context NAME`. Then, you can switch back using `kubectl config use-context
-minikube` in order to run the tests again.
 
 ## Security considerations
 
@@ -178,3 +169,56 @@ A PVCRestore object can be created in any namespace watched by the operator, and
 will be able to restore any PVC from any namespace backed up on the same backup
 location. This means that any user with access to any namespace on the cluster,
 can eventually read the contents of any PVC in any other namespace.
+
+## Contributing
+
+Suggestions are welcomed as GitHub issues - and pull requests are well
+appreciated! This section should help you run the operator locally so that you
+can test your changes.
+
+If you need any help getting this to run, or would like to brainstorm about a
+feature, please file a GitHub issue as well.
+
+## How to run it locally
+
+Run `go run ./cmd -help` to get a list of flags. Example run:
+
+```
+go run ./cmd \
+    -snapshotclass ... \
+    -namespaces ... \
+    -schedule "@daily" \
+    -s3-host s3.eu-west-1.amazonaws.com \
+    -s3-bucket backsnap-example \
+    -s3-access-key-id ... \
+    -s3-secret-access-key ... \
+    -restic-password ...
+```
+
+This will use your local credentials to access the cluster and create resources.
+Of course, if you simply have a `backsnap` binary, just run it as
+`backsnap -s3-host ...`.
+
+If you've made changes to the Restic image that is used in backup jobs, you can
+use `-image` to use your image. Of course, your Kubelet must be able to access
+this image, so `imagePullSecret` can be used if it is hosted on a private
+repository.
+
+## Running the tests
+
+The tests require a Kubernetes cluster that can run Pods, but does not run the
+backsnap operator. That means envtest, the typical unit test framework, won't
+work, because it won't run Pods. Instead, you can run the tests against
+minikube.
+
+```
+minikube start --driver=docker --addons=volumesnapshots,csi-hostpath-driver
+make test
+```
+
+The first minikube command starts minikube, adds it as a context to kubectl, and
+sets it as the active context, so that every kubectl command after it uses
+minikube. You can use `kubectl config get-contexts` to see your configured
+contexts, and can switch to the existing one you had using `kubectl config
+use-context NAME`. Then, you can switch back using `kubectl config use-context
+minikube` in order to run the tests again.

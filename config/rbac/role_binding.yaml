@@ -9,11 +9,12 @@ metadata:
     app.kubernetes.io/part-of: backsnap
     app.kubernetes.io/managed-by: kustomize
   name: manager-rolebinding
+  namespace: backsnap
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: manager-role
+  name: backsnap-manager
 subjects:
 - kind: ServiceAccount
   name: controller-manager
-  namespace: system
+  namespace: backsnap

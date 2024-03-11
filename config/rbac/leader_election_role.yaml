@@ -10,6 +10,7 @@ metadata:
     app.kubernetes.io/part-of: backsnap
     app.kubernetes.io/managed-by: kustomize
   name: leader-election-role
+  namespace: backsnap
 rules:
 - apiGroups:
   - ""
