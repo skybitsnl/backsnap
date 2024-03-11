@@ -1,8 +1,8 @@
 name: Run against Minikube
 on:
   push:
-    tags-ignore:
-      - '**'
+    branches: '*'
+    tags: '!*'
   workflow_call: {}
 jobs:
   e2e:
