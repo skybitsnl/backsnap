@@ -362,7 +362,7 @@ var _ = Describe("PVCBackup and PVCRestore controller", func() {
 			})
 			logs, err := req.Stream(ctx)
 			Expect(err).ToNot(HaveOccurred())
-			defer logs.Close()
+			defer func() { _ = logs.Close() }()
 			bytes, err := io.ReadAll(logs)
 			Expect(err).ToNot(HaveOccurred())
 

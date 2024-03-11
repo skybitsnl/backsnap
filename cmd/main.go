@@ -28,6 +28,7 @@ import (
 	//+kubebuilder:scaffold:imports
 )
 
+// nolint: lll
 var (
 	metricsAddr          = flag.String("metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
 	probeAddr            = flag.String("health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
@@ -51,6 +52,7 @@ var (
 	resticPassword    = flag.String("restic-password", "", "Restic password to encrypt storage by")
 
 	// TODO: support this
+	// nolint: unused
 	sleepBetweenBackups = flag.Int("sleep-between-backups", 30, "Seconds to sleep between backing up of each PVC")
 )
 
@@ -87,8 +89,8 @@ func main() {
 	requiredFlag("s3-host")
 	requiredFlag("s3-bucket")
 
-	namespaces := lo.Map(strings.Split(*namespacesFlag, ","), ignore1[string, int, string](strings.TrimSpace))
-	excludeNamespaces := lo.Map(strings.Split(*excludeNamespacesFlag, ","), ignore1[string, int, string](strings.TrimSpace))
+	namespaces := lo.Map(strings.Split(*namespacesFlag, ","), ignore1[string, int](strings.TrimSpace))
+	excludeNamespaces := lo.Map(strings.Split(*excludeNamespacesFlag, ","), ignore1[string, int](strings.TrimSpace))
 
 	if len(namespaces) > 1 {
 		// filter out "" as it would imply all namespaces when there's also particular namespaces mentioned

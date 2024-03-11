@@ -36,6 +36,8 @@ type PVCRestoreReconciler struct {
 // TODO: should be able to add a finalizer for a PVC which is being backed up?
 // +kubebuilder:rbac:groups=core,resources=persistentvolumeclaims/finalizers,verbs=update
 // +kubebuilder:rbac:groups=batch,resources=jobs,verbs=get;list;watch;create;update;patch;delete
+
+// nolint: gocyclo
 func (r *PVCRestoreReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := slog.With(
 		slog.String("namespace", req.Namespace),
