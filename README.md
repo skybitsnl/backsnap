@@ -223,3 +223,11 @@ minikube. You can use `kubectl config get-contexts` to see your configured
 contexts, and can switch to the existing one you had using `kubectl config
 use-context NAME`. Then, you can switch back using `kubectl config use-context
 minikube` in order to run the tests again.
+
+## Building it locally / running your changes on a cluster
+
+This project uses goreleaser. If you have local changes, you can use
+`goreleaser build --snapshot --clean` to create new binaries in `dist/`. If you
+need Docker images, you can run `goreleaser release --snapshot --clean` which
+will create them locally. You can then use `docker image tag` to give them new
+names and push them to a private registry.
