@@ -1,0 +1,160 @@
+{{- $s3Host := .Values.app.s3.host | required ".Values.app.s3.host is required." -}}
+{{- $s3Bucket := .Values.app.s3.bucket | required ".Values.app.s3.bucket is required." -}}
+{{- $s3AccessKey := .Values.app.s3.accesskey | required ".Values.app.s3.accesskey is required." -}}
+{{- $s3SecretKey := .Values.app.s3.secretkey | required ".Values.app.s3.secretkey is required." -}}
+{{- $resticPassword := .Values.app.restic.password | required ".Values.app.restic.password is required." -}}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backsnap-operator
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: backsnap
+    control-plane: controller-manager
+    app.kubernetes.io/name: deployment
+    app.kubernetes.io/instance: controller-manager
+    app.kubernetes.io/component: manager
+    app.kubernetes.io/created-by: backsnap
+    app.kubernetes.io/part-of: backsnap
+    app.kubernetes.io/managed-by: kustomize
+spec:
+  selector:
+    matchLabels:
+      app: backsnap
+  replicas: 1
+  template:
+    metadata:
+      annotations:
+        kubectl.kubernetes.io/default-container: manager
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      labels:
+        app: backsnap
+    spec:
+      {{- with .Values.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+      - command:
+        - /manager
+        args:
+        # Start a leader election, ensuring that even with two replicas, only one operator
+        # is active at a time.
+        - --leader-elect
+        # In order to include only particular namespaces (default is all namespaces):
+        # - --namespaces
+        # - one,two,three
+        {{- with .Values.app.namespaces.allowList }}
+        - --namespaces
+        - {{ join "," . }}
+        {{- end }}
+
+        # Alternatively, in order to exclude namespaces. We'd recommend setting a schedule
+        # annotation on the namespace instead of using this option, if possible.
+        # - --exclude-namespaces
+        # - dev,staging,testing
+        {{- if not .Values.app.namespaces.allowList }}
+        {{- with .Values.app.namespaces.blockList }}
+        - --exclude-namespaces
+        - {{ join "," . }}
+        {{- end }}
+        {{- end }}
+
+        # Set a default schedule. The default is @daily. We'd recommend keeping this default
+        # and overriding it on a per-namespace basis.
+        {{- if .Values.app.schedule }}
+        - --schedule
+        - "{{ .Values.app.schedule }}"
+        {{- end }}
+
+        # Enable manual mode. This never creates automatic PVCBackups, even if a namespace or
+        # PVC sets a particular schedule in its annotations. If this is set, the operator only
+        # performs back-ups for PVCBackup objects created externally (e.g., by you).
+        # - --manual
+        {{- if .Values.app.manual }}
+        - --manual
+        {{- end }}
+
+        # Backsnap automatically creates volume snapshots while it is preparing
+        # for a backup. The volume snapshot class name set here is used for all
+        # volume snapshots created by Backsnap. Otherwise, the cluster default
+        # volume snapshot class name is used.
+        # - --snapshotclass
+        # - csi-snapshot
+        {{- if .Values.app.snapshotclass }}
+        - --snapshotclass
+        - {{ .Values.app.snapshotclass }}
+        {{- end }}
+
+        # The storage class name set here is used for all PVCs created by Backsnap
+        # both while creating a back-up and while restoring one. Otherwise, the
+        # cluster default storage class is used.
+        # - --volumeclass
+        # - csi-block
+        {{- if .Values.app.volumeclass }}
+        - --snapshotclass
+        - {{ .Values.app.volumeclass }}
+        {{- end }}
+
+        # The location and credentials of the S3 bucket where backups will be stored.
+        # The S3 hostname can be host, host:port or http://host:port/. Any target supported
+        # by Restic is supported, also e.g. MinIO.
+        - --s3-host
+        - {{ $s3Host }}
+        - --s3-bucket
+        - {{ $s3Bucket }}
+        - --s3-access-key-id
+        - {{ $s3AccessKey }}
+        - --s3-secret-access-key
+        - {{ $s3SecretKey }}
+
+        # The encryption key by which Restic will client-side encrypt your
+        # backup. Do not lose this!
+        - --restic-password
+        - {{ $resticPassword }}
+
+        # There are other supported flags, too. See the manager --help (or
+        # main.go) for more information.
+
+        image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+        name: manager
+
+        {{- with .Values.app.securityContext }}
+        securityContext:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
+
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8081
+          initialDelaySeconds: 15
+          periodSeconds: 20
+        
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: 8081
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        
+        resources:
+          {{- toYaml .Values.resources | nindent 10 }}
+      
+      serviceAccountName: controller-manager
+      terminationGracePeriodSeconds: 10
