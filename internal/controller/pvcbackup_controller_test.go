@@ -265,7 +265,34 @@ var _ = Describe("PVCBackup and PVCRestore controller", func() {
 
 			Expect(*backup.Status.Result).To(BeEquivalentTo("Succeeded"))
 
-			By("the S3 volume should contain a single snapshot")
+			By("the PVCBackup should not be deleted after 10 seconds, since it's the last one")
+			time.Sleep(time.Second * 10)
+			Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(backup), backup)).Should(Succeed())
+
+			By("creating a second PVCBackup")
+			backup2 := &v1alpha1.PVCBackup{
+				ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: "my-backup2"},
+				Spec: v1alpha1.PVCBackupSpec{
+					PVCName: "my-data",
+					TTL:     metav1.Duration{Duration: time.Second * 5},
+				},
+			}
+			Expect(k8sClient.Create(ctx, backup2)).Should(Succeed())
+			Eventually(func() bool {
+				Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(backup2), backup2)).Should(Succeed())
+
+				return backup2.Status.FinishedAt != nil && !backup2.Status.FinishedAt.IsZero()
+			}, time.Minute, time.Second).Should(BeTrue())
+
+			Expect(*backup2.Status.Result).To(BeEquivalentTo("Succeeded"))
+
+			By("eventually the first PVCBackup should be deleted")
+			Eventually(func() bool {
+				err := k8sClient.Get(ctx, client.ObjectKeyFromObject(backup), backup)
+				return apierrors.IsNotFound(err)
+			}, time.Minute, time.Second).Should(BeTrue())
+
+			By("the S3 volume should contain two snapshots")
 			prefix := namespace + "/my-data/snapshots"
 			var snapshots []string
 			for object := range mc.ListObjects(ctx, mbucket, mclient.ListObjectsOptions{
@@ -275,11 +302,12 @@ var _ = Describe("PVCBackup and PVCRestore controller", func() {
 				Expect(object.Err).Should(BeNil())
 				snapshots = append(snapshots, object.Key[len(prefix)+1:])
 			}
-			Expect(snapshots).To(HaveLen(1))
+			Expect(snapshots).To(HaveLen(2))
 			Expect(snapshots[0]).ToNot(HaveLen(0))
+			Expect(snapshots[1]).ToNot(HaveLen(0))
 
-			By("deleting the original backup object, PVC and job")
-			Expect(k8sClient.Delete(ctx, backup)).Should(Succeed())
+			By("deleting the second backup object, PVC and job")
+			Expect(k8sClient.Delete(ctx, backup2)).Should(Succeed())
 			Expect(k8sClient.Delete(ctx, pvc, &client.DeleteOptions{
 				PropagationPolicy: lo.ToPtr(metav1.DeletePropagationForeground),
 			})).Should(Succeed())

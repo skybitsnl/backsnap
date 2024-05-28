@@ -84,13 +84,33 @@ func (r *PVCBackupReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		}
 
 		if backup.Status.FinishedAt.Add(backup.Spec.TTL.Duration).Before(r.Clock.Now()) {
-			logger.ErrorContext(ctx, "pvcbackup removal is not implemented")
-			/* TODO: remove this PVCBackup, unless it is the last one to exist
-			   (TODO: should also delete all its owned objects, check this)
+			// Check whether this PVCBackup is the last to exist for this PVC
+
+			siblings := &v1alpha1.PVCBackupList{}
+			if err := r.List(ctx, siblings, client.InNamespace(backup.Namespace)); err != nil {
+				return ctrl.Result{}, err
+			}
+
+			var hasSiblings bool
+			for _, sibling := range siblings.Items {
+				if sibling.Spec.PVCName == backup.Spec.PVCName && sibling.Name != backup.Name {
+					hasSiblings = true
+					break
+				}
+			}
+
+			if !hasSiblings {
+				logger.ErrorContext(ctx, "wanted to remove pvcbackup, but it is the last to exist, skipping")
+				return ctrl.Result{
+					Requeue:      true,
+					RequeueAfter: backup.Spec.TTL.Duration,
+				}, nil
+			}
+
 			if err := r.Delete(ctx, &backup); err != nil {
 				return ctrl.Result{}, err
 			}
-			*/
+
 			return ctrl.Result{}, nil
 		}
 
