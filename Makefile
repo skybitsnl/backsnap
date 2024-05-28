@@ -62,6 +62,12 @@ vet: ## Run go vet against code.
 
 .PHONY: test
 test: manifests generate fmt vet envtest ## Run tests.
+	@[ "$(shell $(KUBECTL) config current-context)" = "minikube" ] || { \
+		echo >&2 ; \
+		echo "Cowardly refusing to run tests with a context other than minikube. Please see the README." >&2 ; \
+		echo >&2 ; \
+		exit 1 ; \
+	}
 	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test ./... -coverprofile cover.out -ginkgo.v -test.v
 
 GOLANGCI_LINT = $(shell pwd)/bin/golangci-lint
