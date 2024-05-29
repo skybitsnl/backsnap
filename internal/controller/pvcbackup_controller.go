@@ -83,7 +83,9 @@ func (r *PVCBackupReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 			return ctrl.Result{}, nil
 		}
 
-		if backup.Status.FinishedAt.Add(backup.Spec.TTL.Duration).Before(r.Clock.Now()) {
+		deletionAt := backup.Status.FinishedAt.Add(backup.Spec.TTL.Duration)
+		timeUntilDeletion := r.Clock.Now().Sub(deletionAt)
+		if timeUntilDeletion < 0 {
 			// Check whether this PVCBackup is the last to exist for this PVC
 
 			siblings := &v1alpha1.PVCBackupList{}
@@ -106,6 +108,8 @@ func (r *PVCBackupReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 					RequeueAfter: backup.Spec.TTL.Duration,
 				}, nil
 			}
+
+			logger.InfoContext(ctx, "deleting finished pvcbackup, since its TTL expired")
 
 			if err := r.Delete(ctx, &backup); err != nil {
 				return ctrl.Result{}, err
@@ -157,7 +161,7 @@ func (r *PVCBackupReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		// Requeue for deletion after TTL expires
 		return ctrl.Result{
 			Requeue:      true,
-			RequeueAfter: backup.Spec.TTL.Duration,
+			RequeueAfter: timeUntilDeletion,
 		}, nil
 	}
 
