@@ -84,8 +84,9 @@ func (r *PVCBackupReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		}
 
 		deletionAt := backup.Status.FinishedAt.Add(backup.Spec.TTL.Duration)
-		timeUntilDeletion := r.Clock.Now().Sub(deletionAt)
-		if timeUntilDeletion < 0 {
+		timeUntilDeletion := deletionAt.Sub(r.Clock.Now())
+
+		if timeUntilDeletion <= 0 {
 			// Check whether this PVCBackup is the last to exist for this PVC
 
 			siblings := &v1alpha1.PVCBackupList{}
@@ -93,16 +94,16 @@ func (r *PVCBackupReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 				return ctrl.Result{}, err
 			}
 
-			var hasSiblings bool
+			var hasOlderSiblings bool
 			for _, sibling := range siblings.Items {
-				if sibling.Spec.PVCName == backup.Spec.PVCName && sibling.Name != backup.Name {
-					hasSiblings = true
+				if sibling.Spec.PVCName == backup.Spec.PVCName && sibling.Status.FinishedAt != nil && sibling.Status.FinishedAt.After(backup.Status.FinishedAt.Time) {
+					hasOlderSiblings = true
 					break
 				}
 			}
 
-			if !hasSiblings {
-				logger.ErrorContext(ctx, "wanted to remove pvcbackup, but it is the last to exist, skipping")
+			if !hasOlderSiblings {
+				logger.ErrorContext(ctx, "wanted to remove pvcbackup, but it is the last to finish, skipping")
 				return ctrl.Result{
 					Requeue:      true,
 					RequeueAfter: backup.Spec.TTL.Duration,
