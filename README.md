@@ -230,4 +230,13 @@ This project uses goreleaser. If you have local changes, you can use
 `goreleaser build --snapshot --clean` to create new binaries in `dist/`. If you
 need Docker images, you can run `goreleaser release --snapshot --clean` which
 will create them locally. You can then use `docker image tag` to give them new
-names and push them to a private registry.
+names and push them to a private registry as such:
+
+```
+$ docker tag sjorsgielen/backsnap:latest-arm64 my-private-registry/backsnap:latest-arm64
+$ docker tag sjorsgielen/backsnap:latest-amd64 my-private-registry/backsnap:latest-amd64
+$ docker push my-private-registry/backsnap:latest-arm64
+$ docker push my-private-registry/backsnap:latest-amd64
+$ docker manifest create my-private-registry/backsnap:latest --amend my-private-registry/backsnap:latest-arm64 --amend my-private-registry/backsnap:latest-amd64
+$ docker manifest push my-private-registry/backsnap:latest
+```
