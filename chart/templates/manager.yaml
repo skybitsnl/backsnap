@@ -59,7 +59,7 @@ spec:
         # In order to include only particular namespaces (default is all namespaces):
         # - --namespaces
         # - one,two,three
-        {{- with .Values.app.namespaces.allowList }}
+        {{- with .Values.app.namespaces.allow }}
         - --namespaces
         - {{ join "," . }}
         {{- end }}
@@ -68,11 +68,9 @@ spec:
         # annotation on the namespace instead of using this option, if possible.
         # - --exclude-namespaces
         # - dev,staging,testing
-        {{- if not .Values.app.namespaces.allowList }}
-        {{- with .Values.app.namespaces.blockList }}
+        {{- with .Values.app.namespaces.exclude }}
         - --exclude-namespaces
         - {{ join "," . }}
-        {{- end }}
         {{- end }}
 
         # Set a default schedule. The default is @daily. We'd recommend keeping this default

@@ -36,9 +36,8 @@ app:
       drop:
       - "ALL"
   namespaces:
-    allowList: []
-    # blockList is ignored if allowList has a value set
-    blockList: []
+    allow: []
+    exclude: []
   # Default is @daily when schedule is blank. Other options include but are not limited to: @hourly and @weekly
   # See https://crontab.guru/ for examples and explanations.
   schedule: "@daily"
