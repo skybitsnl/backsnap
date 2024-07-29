@@ -24,13 +24,13 @@ type PVCBackupReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
 	Clock
-	Namespaces        []string
-	ExcludeNamespaces []string
-	BackupSettings    BackupSettings
+	MaxRunningBackups   int
+	SleepBetweenBackups int
+	Namespaces          []string
+	ExcludeNamespaces   []string
+	BackupSettings      BackupSettings
 
-	// TODO: need to add a boolean whether we are currently running any backups.
-	// If so, other backups need to wait until that one is done (and ideally, wait
-	// a configurable amount longer to reduce load on the storage layer).
+	CurrentRunningBackups map[string]struct{}
 }
 
 // TODO: these next roles allow creating and deleting PVCs and jobs anywhere.
@@ -173,6 +173,26 @@ func (r *PVCBackupReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	}, &pvc); err != nil {
 		logger.ErrorContext(ctx, "unable to fetch PVC", slog.Any("err", err))
 		return ctrl.Result{}, err
+	}
+
+	qualifiedName := backupQualifiedName(backup)
+	if _, ok := r.CurrentRunningBackups[qualifiedName]; ok {
+		// Backup already considered running, continue here
+	} else if r.MaxRunningBackups > 0 && len(r.CurrentRunningBackups) >= r.MaxRunningBackups {
+		logger.InfoContext(ctx, "max number of backups already running - waiting for one to finish")
+		return ctrl.Result{
+			Requeue:      true,
+			RequeueAfter: time.Second * 30,
+		}, nil
+	}
+	r.CurrentRunningBackups[qualifiedName] = struct{}{}
+
+	if backup.Status.StartedAt == nil {
+		backup.Status.StartedAt = lo.ToPtr(metav1.Time{Time: time.Now()})
+		if err := r.Status().Update(ctx, &backup); err != nil {
+			logger.ErrorContext(ctx, "failed to update PVCBackup", slog.Any("err", err))
+			return ctrl.Result{}, err
+		}
 	}
 
 	// Retrieve or create the VolumeSnapshot
@@ -378,20 +398,81 @@ func (r *PVCBackupReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	)
 	backup.Status.FinishedAt = lo.ToPtr(metav1.Time{Time: time.Now()})
 	backup.Status.Result = lo.ToPtr[v1alpha1.Result]("Succeeded")
+
+	// After setting FinishedAt, and before actually performing the Update
+	time.Sleep(time.Duration(r.SleepBetweenBackups) * time.Second)
+
 	if err := r.Status().Update(ctx, &backup); err != nil {
-		logger.ErrorContext(ctx, "Failed to update PVCBackup", slog.Any("err", err))
+		logger.ErrorContext(ctx, "failed to update PVCBackup", slog.Any("err", err))
 		return ctrl.Result{}, err
 	}
+
+	delete(r.CurrentRunningBackups, qualifiedName)
 
 	// Reconcile ourselves immediately to clean up
 	return ctrl.Result{Requeue: true}, nil
 }
 
+func backupIsRunning(backup v1alpha1.PVCBackup) bool {
+	if backup.Status.StartedAt == nil || backup.Status.StartedAt.IsZero() {
+		return false
+	}
+	return backup.Status.FinishedAt != nil && !backup.Status.FinishedAt.IsZero()
+}
+
+func backupQualifiedName(backup v1alpha1.PVCBackup) string {
+	return backup.Namespace + "/" + backup.Name
+}
+
+func (r *PVCBackupReconciler) FindCurrentRunningBackups(ctx context.Context) error {
+	r.CurrentRunningBackups = map[string]struct{}{}
+
+	slog.InfoContext(ctx, "Finding currently running backups...")
+
+	if len(r.Namespaces) == 1 && r.Namespaces[0] == "" {
+		// List from all namespaces, and then exclude those in excludeNamespaces
+		backups := &v1alpha1.PVCBackupList{}
+		if err := r.List(ctx, backups); err != nil {
+			return err
+		}
+		for _, backup := range backups.Items {
+			if backupIsRunning(backup) {
+				if !lo.Contains(r.ExcludeNamespaces, backup.Namespace) {
+					r.CurrentRunningBackups[backupQualifiedName(backup)] = struct{}{}
+				}
+			}
+		}
+	} else {
+		// List from the given namespaces directly, unless also in excludeNamespaces
+		for _, namespace := range r.Namespaces {
+			if lo.Contains(r.ExcludeNamespaces, namespace) {
+				continue
+			}
+
+			backups := &v1alpha1.PVCBackupList{}
+			if err := r.List(ctx, backups, client.InNamespace(namespace)); err != nil {
+				return err
+			}
+
+			for _, backup := range backups.Items {
+				if backupIsRunning(backup) {
+					r.CurrentRunningBackups[backupQualifiedName(backup)] = struct{}{}
+				}
+			}
+		}
+	}
+
+	slog.InfoContext(ctx, "Retrieved backups currently running in watched namespaces", slog.Any("backups", lo.Keys(r.CurrentRunningBackups)))
+	return nil
+}
+
 // SetupWithManager sets up the controller with the Manager.
-func (r *PVCBackupReconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *PVCBackupReconciler) SetupWithManager(ctx context.Context, mgr ctrl.Manager) error {
 	if r.Clock == nil {
 		r.Clock = realClock{}
 	}
+
+	r.FindCurrentRunningBackups(ctx)
 
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&v1alpha1.PVCBackup{}).

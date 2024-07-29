@@ -2,6 +2,7 @@ package controller
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"net"
 	"os"
@@ -45,13 +46,16 @@ var _ = Describe("PVCBackup and PVCRestore controller", func() {
 		snapshotClassName = "csi-hostpath-snapclass"
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
+	var ctx context.Context
+	var cancel context.CancelFunc
 
 	var mc *mclient.Client
 	var namespace string
 
 	var mbucket string
 	BeforeEach(func() {
+		ctx, cancel = context.WithCancel(context.Background())
+
 		By("creating a namespace")
 		namespace = uuid.NewString()
 		err := k8sClient.Create(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: namespace}})
@@ -110,7 +114,11 @@ var _ = Describe("PVCBackup and PVCRestore controller", func() {
 		Expect(l.Close()).ToNot(HaveOccurred())
 		go func() {
 			defer GinkgoRecover()
+			// ensure we keep the ctx we started with, and not the next node's ctx
+			ctx := ctx
 			cmd := exec.CommandContext(ctx, "kubectl", "port-forward", "-n", namespace, "pod/minio", portFromAddr(maddr)+":9000")
+			cmd.Stdout = GinkgoWriter
+			cmd.Stderr = GinkgoWriter
 			Expect(cmd.Start()).To(BeNil())
 			err := cmd.Wait()
 			if ctx.Err() == nil {
@@ -155,11 +163,13 @@ var _ = Describe("PVCBackup and PVCRestore controller", func() {
 		}
 
 		err = (&PVCBackupReconciler{
-			Client:         k8sManager.GetClient(),
-			Scheme:         k8sManager.GetScheme(),
-			Namespaces:     []string{namespace},
-			BackupSettings: backupSettings,
-		}).SetupWithManager(k8sManager)
+			Client:              k8sManager.GetClient(),
+			Scheme:              k8sManager.GetScheme(),
+			Namespaces:          []string{namespace},
+			BackupSettings:      backupSettings,
+			MaxRunningBackups:   1,
+			SleepBetweenBackups: 1,
+		}).SetupWithManager(ctx, k8sManager)
 		Expect(err).ToNot(HaveOccurred())
 
 		err = (&PVCRestoreReconciler{
@@ -181,6 +191,7 @@ var _ = Describe("PVCBackup and PVCRestore controller", func() {
 		Expect(err).ToNot(HaveOccurred())
 
 		cancel()
+		ctx = nil
 	})
 
 	When("a PVCBackup is created", func() {
@@ -395,6 +406,137 @@ var _ = Describe("PVCBackup and PVCRestore controller", func() {
 			Expect(err).ToNot(HaveOccurred())
 
 			Expect(string(bytes)).To(Equal("Hello World!\n"))
+		})
+	})
+
+	When("multiple PVCBackups are created", func() {
+		It("should run only one of them at a time", func() {
+			By("creating three PVCs")
+			var pvcs []*corev1.PersistentVolumeClaim
+			for i := 0; i < 3; i += 1 {
+				pvc := &corev1.PersistentVolumeClaim{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      fmt.Sprintf("my-data-%d", i),
+						Namespace: namespace,
+					},
+					Spec: corev1.PersistentVolumeClaimSpec{
+						StorageClassName: &storageClassName,
+						AccessModes:      []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
+						Resources: corev1.VolumeResourceRequirements{
+							Requests: map[corev1.ResourceName]resource.Quantity{
+								corev1.ResourceStorage: resource.MustParse("1Gi"),
+							},
+						},
+					},
+				}
+				Expect(k8sClient.Create(ctx, pvc)).Should(Succeed())
+				pvcs = append(pvcs, pvc)
+			}
+
+			By("filling them with some data")
+			var jobs []*batchv1.Job
+			for i, pvc := range pvcs {
+				job := &batchv1.Job{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      fmt.Sprintf("data-filler-%d", i),
+						Namespace: namespace,
+					},
+					Spec: batchv1.JobSpec{
+						Template: corev1.PodTemplateSpec{
+							Spec: corev1.PodSpec{
+								RestartPolicy: corev1.RestartPolicyOnFailure,
+								Volumes: []corev1.Volume{{
+									Name: "data",
+									VolumeSource: corev1.VolumeSource{
+										PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
+											ClaimName: pvc.ObjectMeta.Name,
+											ReadOnly:  false,
+										},
+									},
+								}},
+								Containers: []corev1.Container{{
+									Name:  "default",
+									Image: "ubuntu:jammy",
+									Command: []string{
+										"/bin/bash", "-c", "dd if=/dev/urandom of=/data/foo.txt bs=1M count=100",
+									},
+									Env: []corev1.EnvVar{},
+									VolumeMounts: []corev1.VolumeMount{{
+										Name:      "data",
+										ReadOnly:  false,
+										MountPath: "/data",
+									}},
+								}},
+							},
+						},
+					},
+				}
+				Expect(k8sClient.Create(ctx, job)).Should(Succeed())
+				jobs = append(jobs, job)
+			}
+
+			Eventually(func() bool {
+				for _, job := range jobs {
+					Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(job), job)).Should(Succeed())
+
+					if job.Status.CompletionTime == nil || job.Status.CompletionTime.IsZero() {
+						return false
+					}
+				}
+				return true
+			}, time.Minute, time.Second).Should(BeTrue())
+
+			By("creating PVCBackups for all of them")
+			var backups []*v1alpha1.PVCBackup
+			for i, pvc := range pvcs {
+				backup := &v1alpha1.PVCBackup{
+					ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: fmt.Sprintf("my-backup-%d", i)},
+					Spec: v1alpha1.PVCBackupSpec{
+						PVCName: pvc.Name,
+						TTL:     metav1.Duration{Duration: time.Minute * 5},
+					},
+				}
+				Expect(k8sClient.Create(ctx, backup)).Should(Succeed())
+
+				backups = append(backups, backup)
+			}
+
+			By("waiting until they complete")
+			// three backups, we give each a minute, plus there's a 30 second period worst-case period after
+			// which the controller tries to start a backup again, so 3 * 1.5 = 4.5 minutes.
+			Eventually(func() bool {
+				for _, backup := range backups {
+					Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(backup), backup)).Should(Succeed())
+
+					if backup.Status.FinishedAt == nil || backup.Status.FinishedAt.IsZero() {
+						return false
+					}
+				}
+				return true
+			}, 5*time.Minute, time.Second).Should(BeTrue())
+
+			for _, backup := range backups {
+				Expect(*backup.Status.Result).To(BeEquivalentTo("Succeeded"))
+			}
+
+			By("checking that none of them ran simultaneously")
+			for i, backup := range backups {
+				for j, backup2 := range backups {
+					if i == j {
+						continue
+					}
+					st1 := backup.Status.StartedAt
+					st2 := backup2.Status.StartedAt
+					startedBeforeEqual := st1.Equal(st2) || st1.Before(st2)
+					finishedBefore := backup.Status.FinishedAt.Before(st2)
+					if startedBeforeEqual && !finishedBefore {
+						Fail(fmt.Sprintf("backup %s (%s-%s) overlapped with backup %s (%s-%s)",
+							backup.Name, backup.Status.StartedAt.Format("15:04:05"), backup.Status.FinishedAt.Format("15:04:05"),
+							backup2.Name, backup2.Status.StartedAt.Format("15:04:05"), backup2.Status.FinishedAt.Format("15:04:05"),
+						))
+					}
+				}
+			}
 		})
 	})
 })

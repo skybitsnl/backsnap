@@ -40,6 +40,8 @@ var (
 	excludeNamespacesFlag = flag.String("exclude-namespaces", "", "exclude namespaces")
 	defaultSchedule       = flag.String("schedule", "@daily", "Default backup schedule, can be overridden per namespace or per PVC with annotations - set to empty if you want no automatic backups")
 	manual                = flag.Bool("manual", false, "Manual mode: don't automatically create any PVCBackup objects")
+	maxRunningBackups     = flag.Int("max-running-backups", 1, "Maximum amount of backups to run simultaneously")
+	sleepBetweenBackups   = flag.Int("sleep-between-backups", 30, "Seconds to sleep between backing up of each PVC")
 
 	snapshotClassFlag = flag.String("snapshotclass", "", "volumeSnapshotClassName")
 	volumeClassFlag   = flag.String("volumeclass", "", "volumeClassName")
@@ -50,10 +52,6 @@ var (
 	s3AccessKeyId     = flag.String("s3-access-key-id", "", "S3 access key ID")
 	s3SecretAccessKey = flag.String("s3-secret-access-key", "", "S3 secret access key")
 	resticPassword    = flag.String("restic-password", "", "Restic password to encrypt storage by")
-
-	// TODO: support this
-	// nolint: unused
-	sleepBetweenBackups = flag.Int("sleep-between-backups", 30, "Seconds to sleep between backing up of each PVC")
 )
 
 var (
@@ -143,10 +141,12 @@ func main() {
 	}
 
 	if err = (&controller.PVCBackupReconciler{
-		Client:            mgr.GetClient(),
-		Scheme:            mgr.GetScheme(),
-		Namespaces:        namespaces,
-		ExcludeNamespaces: excludeNamespaces,
+		Client:              mgr.GetClient(),
+		Scheme:              mgr.GetScheme(),
+		Namespaces:          namespaces,
+		ExcludeNamespaces:   excludeNamespaces,
+		MaxRunningBackups:   *maxRunningBackups,
+		SleepBetweenBackups: *sleepBetweenBackups,
 		BackupSettings: controller.BackupSettings{
 			SnapshotClass:     *snapshotClassFlag,
 			VolumeClass:       *volumeClassFlag,
@@ -158,7 +158,7 @@ func main() {
 			S3SecretAccessKey: *s3SecretAccessKey,
 			ResticPassword:    *resticPassword,
 		},
-	}).SetupWithManager(mgr); err != nil {
+	}).SetupWithManager(ctx, mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "PVCBackup")
 		os.Exit(1)
 	}

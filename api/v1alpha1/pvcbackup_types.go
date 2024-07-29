@@ -23,6 +23,7 @@ type PVCBackupSpec struct {
 type Result string
 
 type PVCBackupStatus struct {
+	StartedAt  *metav1.Time `json:"startedAt,omitempty"`
 	FinishedAt *metav1.Time `json:"finishedAt,omitempty"`
 	Result     *Result      `json:"result,omitempty"`
 }
