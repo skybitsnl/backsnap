@@ -8,7 +8,7 @@ image:
   repository: sjorsgielen/backsnap
   pullPolicy: IfNotPresent
   # Overrides the image tag whose default is the chart appVersion.
-  tag: "v0.1.0"
+  tag: ""
 
 podAnnotations: {}
 
@@ -40,15 +40,16 @@ app:
     # blockList is ignored if allowList has a value set
     blockList: []
   # Default is @daily when schedule is blank. Other options include but are not limited to: @hourly and @weekly
+  # See https://crontab.guru/ for examples and explanations.
   schedule: "@daily"
   # Default is nothing to run backsnap in automatic mode
   manual: ""
-  snapshotclass: "ceph-block"
-  volumeclass: "ceph-block"
+  snapshotclass: ""
+  volumeclass: ""
   s3:
     host: ""
     bucket: ""
     accesskey: ""
     secretkey: ""
   restic:
-    password: "ChangeMe"
+    password: ""
