@@ -105,7 +105,7 @@ spec:
         # - --volumeclass
         # - csi-block
         {{- if .Values.app.volumeclass }}
-        - --snapshotclass
+        - --volumeclass
         - {{ .Values.app.volumeclass }}
         {{- end }}
 
