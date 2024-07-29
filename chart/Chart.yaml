@@ -21,7 +21,7 @@ version: 0.3.0
 # incremented each time you make changes to the application. Versions are not expected to
 # follow Semantic Versioning. They should reflect the version the application is using.
 # It is recommended to use it with quotes.
-appVersion: "0.3.0"
+appVersion: "v0.3.0"
 
 # APP_VERSION: 0.3
 # CHART_PATCH: 0

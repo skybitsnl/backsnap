@@ -21,7 +21,7 @@ version: %APP_VERSION%.%CHART_PATCH%
 # incremented each time you make changes to the application. Versions are not expected to
 # follow Semantic Versioning. They should reflect the version the application is using.
 # It is recommended to use it with quotes.
-appVersion: "%APP_VERSION%.%APP_PATCH%"
+appVersion: "v%APP_VERSION%.%APP_PATCH%"
 
 # APP_VERSION: %APP_VERSION%
 # CHART_PATCH: %CHART_PATCH%
