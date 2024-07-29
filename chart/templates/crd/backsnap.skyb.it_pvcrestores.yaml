@@ -3,7 +3,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.13.0
+    controller-gen.kubebuilder.io/version: v0.15.0
   name: pvcrestores.backsnap.skyb.it
 spec:
   group: backsnap.skyb.it
@@ -20,14 +20,19 @@ spec:
         description: PVCRestore is the Schema for the pvcrestores API
         properties:
           apiVersion:
-            description: 'APIVersion defines the versioned schema of this representation
-              of an object. Servers should convert recognized schemas to the latest
-              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
             type: string
           kind:
-            description: 'Kind is a string value representing the REST resource this
-              object represents. Servers may infer this from the endpoint the client
-              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
             type: string
           metadata:
             type: object
@@ -35,31 +40,33 @@ spec:
             description: PVCRestoreSpec defines the desired state of PVCRestore
             properties:
               sourceNamespace:
-                description: The namespace that the source PVC used to exist in. If
-                  empty, assume that the source namespace is the same as the namespace
-                  where this PVCRestore object exists.
+                description: |-
+                  The namespace that the source PVC used to exist in. If empty, assume that
+                  the source namespace is the same as the namespace where this PVCRestore
+                  object exists.
                 type: string
               sourcePvc:
-                description: The name of the source PVC that will be restored. The
-                  source PVC does not need to exist anymore, this is just for finding
-                  its data.
+                description: |-
+                  The name of the source PVC that will be restored. The source PVC does not
+                  need to exist anymore, this is just for finding its data.
                 type: string
               sourceSnapshot:
                 description: The snapshot to restore, or empty to restore the latest
                   snapshot.
                 type: string
               targetPvc:
-                description: The name of the new PVC where the source contents will
-                  be restored into. The PVC must not exist, and will be created. If
-                  empty, assume that the target PVC is the same name as the source
-                  PVC.
+                description: |-
+                  The name of the new PVC where the source contents will be restored into.
+                  The PVC must not exist, and will be created. If empty, assume that the
+                  target PVC is the same name as the source PVC.
                 type: string
               targetPvcSize:
                 anyOf:
                 - type: integer
                 - type: string
-                description: The size of the target PVC. Must be large enough to contain
-                  the backup's contents.
+                description: |-
+                  The size of the target PVC. Must be large enough to contain the backup's
+                  contents.
                 pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                 x-kubernetes-int-or-string: true
             type: object

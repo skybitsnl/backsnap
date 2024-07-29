@@ -24,8 +24,12 @@ cp ../config/rbac/leader_election_role* templates/rbac
 cp ../config/rbac/role* templates/rbac
 cp ../config/rbac/service_account.yaml templates
 
-# Replace the namespaces
-find templates -type f -exec gsed -i 's/namespace: backsnap/namespace: {{ .Release.Namespace }}/' {} \;
+# Replace the namespaces and managed-by
+find templates -type f -exec gsed -i \
+	-e 's/namespace: backsnap/namespace: {{ .Release.Namespace }}/' \
+	-e 's/managed-by: kustomize/managed-by: Helm/' \
+	\
+	{} \;
 
 # Figure out the versioning
 CURRENT_VERSION="$(cat Chart.yaml | grep APP_VERSION: | awk '{print $3}')"

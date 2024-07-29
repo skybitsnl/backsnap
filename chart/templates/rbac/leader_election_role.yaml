@@ -8,7 +8,7 @@ metadata:
     app.kubernetes.io/component: rbac
     app.kubernetes.io/created-by: backsnap
     app.kubernetes.io/part-of: backsnap
-    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/managed-by: Helm
   name: leader-election-role
   namespace: {{ .Release.Namespace }}
 rules:
