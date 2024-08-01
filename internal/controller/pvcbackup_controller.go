@@ -423,10 +423,9 @@ func (r *PVCBackupReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 }
 
 func backupIsRunning(backup v1alpha1.PVCBackup) bool {
-	if backup.Status.StartedAt == nil || backup.Status.StartedAt.IsZero() {
-		return false
-	}
-	return backup.Status.FinishedAt != nil && !backup.Status.FinishedAt.IsZero()
+	started := backup.Status.StartedAt != nil && !backup.Status.StartedAt.IsZero()
+	finished := backup.Status.FinishedAt != nil && !backup.Status.FinishedAt.IsZero()
+	return started && !finished
 }
 
 func backupQualifiedName(backup v1alpha1.PVCBackup) string {
