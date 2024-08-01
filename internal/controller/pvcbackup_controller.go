@@ -51,6 +51,12 @@ type PVCBackupReconciler struct {
 
 // nolint: gocyclo
 func (r *PVCBackupReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+	if r.CurrentRunningBackups == nil {
+		if err := r.FindCurrentRunningBackups(ctx); err != nil {
+			return ctrl.Result{}, err
+		}
+	}
+
 	logger := slog.With(
 		slog.String("namespace", req.Namespace),
 		slog.String("pvcbackup", req.Name),
@@ -179,7 +185,10 @@ func (r *PVCBackupReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	if _, ok := r.CurrentRunningBackups[qualifiedName]; ok {
 		// Backup already considered running, continue here
 	} else if r.MaxRunningBackups > 0 && len(r.CurrentRunningBackups) >= r.MaxRunningBackups {
-		logger.InfoContext(ctx, "max number of backups already running - waiting for one to finish")
+		logger.InfoContext(ctx, "max number of backups already running - waiting for one to finish",
+			slog.Int("running", len(r.CurrentRunningBackups)),
+			slog.Int("max", r.MaxRunningBackups),
+		)
 		return ctrl.Result{
 			Requeue:      true,
 			RequeueAfter: time.Second * 30,
@@ -471,8 +480,6 @@ func (r *PVCBackupReconciler) SetupWithManager(ctx context.Context, mgr ctrl.Man
 	if r.Clock == nil {
 		r.Clock = realClock{}
 	}
-
-	r.FindCurrentRunningBackups(ctx)
 
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&v1alpha1.PVCBackup{}).
