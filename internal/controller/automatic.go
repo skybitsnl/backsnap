@@ -87,6 +87,7 @@ func (r *AutomaticPVCBackupCreator) Reconcile(ctx context.Context, req ctrl.Requ
 			slog.String("cron", schedule),
 			slog.Any("err", err),
 		)
+		return ctrl.Result{}, err
 	}
 
 	// Find the last backup for this PVC, or its created date otherwise
