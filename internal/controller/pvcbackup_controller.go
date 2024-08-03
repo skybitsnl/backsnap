@@ -109,7 +109,7 @@ func (r *PVCBackupReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 			}
 
 			if !hasOlderSiblings {
-				logger.ErrorContext(ctx, "wanted to remove pvcbackup, but it is the last to finish, skipping")
+				logger.InfoContext(ctx, "wanted to remove pvcbackup, but it is the last to finish, skipping")
 				return ctrl.Result{
 					Requeue:      true,
 					RequeueAfter: backup.Spec.TTL.Duration,
