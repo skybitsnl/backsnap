@@ -140,15 +140,16 @@ func (r *AutomaticPVCBackupCreator) Reconcile(ctx context.Context, req ctrl.Requ
 	)
 
 	// If the next backup is in the future, schedule our next reconcile then
-	if nextBackup.After(time.Now()) {
+	now := time.Now()
+	if nextBackup.After(now) {
 		return ctrl.Result{
 			Requeue:      true,
 			RequeueAfter: time.Until(nextBackup),
 		}, nil
 	}
 
-	// Like jobs from cronjobs, give backup names a deterministic name to avoid duplicates
-	backupName := fmt.Sprintf("%s-%d", pvc.Name, nextBackup.Unix())
+	// Give backup names a unique name containing their scheduled unix timestamps.
+	backupName := fmt.Sprintf("%s-%d", pvc.Name, now.Unix())
 
 	newBackup := &v1alpha1.PVCBackup{
 		ObjectMeta: metav1.ObjectMeta{
