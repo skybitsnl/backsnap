@@ -1,8 +1,8 @@
 apiVersion: backsnap.skyb.it/v1alpha1
 kind: PVCBackup
 metadata:
-  name: your-data-backup
-  namespace: your-application
+  name: my-data-backup
+  namespace: my-application
 spec:
-  pvc: your-data
+  pvc: my-data
   ttl: 1h

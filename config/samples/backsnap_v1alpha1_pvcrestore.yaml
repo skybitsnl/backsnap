@@ -1,13 +1,8 @@
 apiVersion: backsnap.skyb.it/v1alpha1
 kind: PVCRestore
 metadata:
-  labels:
-    app.kubernetes.io/name: pvcrestore
-    app.kubernetes.io/instance: pvcrestore-sample
-    app.kubernetes.io/part-of: backsnap
-    app.kubernetes.io/managed-by: kustomize
-    app.kubernetes.io/created-by: backsnap
-  name: pvcrestore-sample
+  name: my-data-restore
+  namespace: my-application
 spec:
   sourcePvc: "my-data"
   # Empty means 'same namespace as this PVCRestore object'
