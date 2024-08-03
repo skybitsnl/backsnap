@@ -24,6 +24,21 @@ import (
 
 var (
 	jobOwnerKey = ".metadata.controller"
+
+	// Sometimes, leap seconds or time differences between systems may cause a
+	// backup to exist *just* before its schedule. For example, a situation has
+	// been observed where a backup was scheduled at 12:00:00 UTC, but its
+	// eventual creationDate was 11:59:59 UTC. This then causes another backup
+	// to be executed at 12:00:00, i.e. two backups within a very small time
+	// interval. To prevent this, we have a certain tolerance that allows a
+	// backup to be created just before its scheduled time, to act as a backup
+	// considered at that scheduled time. This is expressed as a percentage of
+	// the normal interval.
+	// For example, if the schedule is @hourly, the normal interval is 3600
+	// seconds. A tolerance factor of 1% (0.01) means a tolerance of 36 seconds,
+	// i.e. a backup created after 11:59:24 or later will be considered scheduled
+	// at 12:00:00, so the next backup will be created at 13:00:00 in this case.
+	ScheduleIntervalTolerance = 0.01
 )
 
 type AutomaticPVCBackupCreator struct {
@@ -106,6 +121,19 @@ func (r *AutomaticPVCBackupCreator) Reconcile(ctx context.Context, req ctrl.Requ
 	}, pvc.CreationTimestamp.Time)
 
 	nextBackup := parsedSchedule.Next(newestBackup)
+
+	// If the nextBackup is very close to the last backup, less than a low
+	// percentage of the expected interval, then skip the next backup. See the
+	// documentation next to ScheduleIntervalTolerance.
+	actualInterval := nextBackup.Sub(newestBackup)
+	scheduleInterval := parsedSchedule.Next(nextBackup).Sub(nextBackup)
+	if float64(actualInterval) < float64(scheduleInterval)*ScheduleIntervalTolerance {
+		logger.InfoContext(ctx, "the most-recent backup is within tolerance of a more recent scheduled backup - skipping that scheduled backup",
+			slog.Time("mostrecent", newestBackup),
+			slog.Time("scheduled", nextBackup),
+		)
+		nextBackup = parsedSchedule.Next(nextBackup)
+	}
 
 	logger.InfoContext(ctx, "next backup for pvc should occur at",
 		slog.Time("next", nextBackup),
