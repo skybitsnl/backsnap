@@ -140,6 +140,18 @@ func main() {
 		}
 	}
 
+	backupSettings := controller.BackupSettings{
+		SnapshotClass:     *snapshotClassFlag,
+		VolumeClass:       *volumeClassFlag,
+		ImagePullSecret:   *imagePullSecret,
+		Image:             *image,
+		S3Host:            *s3Host,
+		S3Bucket:          *s3Bucket,
+		S3AccessKeyId:     *s3AccessKeyId,
+		S3SecretAccessKey: *s3SecretAccessKey,
+		ResticPassword:    *resticPassword,
+	}
+
 	if err = (&controller.PVCBackupReconciler{
 		Client:              mgr.GetClient(),
 		Scheme:              mgr.GetScheme(),
@@ -147,24 +159,17 @@ func main() {
 		ExcludeNamespaces:   excludeNamespaces,
 		MaxRunningBackups:   *maxRunningBackups,
 		SleepBetweenBackups: *sleepBetweenBackups,
-		BackupSettings: controller.BackupSettings{
-			SnapshotClass:     *snapshotClassFlag,
-			VolumeClass:       *volumeClassFlag,
-			ImagePullSecret:   *imagePullSecret,
-			Image:             *image,
-			S3Host:            *s3Host,
-			S3Bucket:          *s3Bucket,
-			S3AccessKeyId:     *s3AccessKeyId,
-			S3SecretAccessKey: *s3SecretAccessKey,
-			ResticPassword:    *resticPassword,
-		},
+		BackupSettings:      backupSettings,
 	}).SetupWithManager(ctx, mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "PVCBackup")
 		os.Exit(1)
 	}
 	if err = (&controller.PVCRestoreReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
+		Client:            mgr.GetClient(),
+		Scheme:            mgr.GetScheme(),
+		Namespaces:        namespaces,
+		ExcludeNamespaces: excludeNamespaces,
+		BackupSettings:    backupSettings,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "PVCRestore")
 		os.Exit(1)
