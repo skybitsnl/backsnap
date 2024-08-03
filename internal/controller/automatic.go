@@ -39,6 +39,9 @@ var (
 	// i.e. a backup created after 11:59:24 or later will be considered scheduled
 	// at 12:00:00, so the next backup will be created at 13:00:00 in this case.
 	ScheduleIntervalTolerance = 0.01
+
+	// Default time-to-live for newly created backups: 3 days.
+	DefaultTTL = 3 * 24 * time.Hour
 )
 
 type AutomaticPVCBackupCreator struct {
@@ -158,7 +161,7 @@ func (r *AutomaticPVCBackupCreator) Reconcile(ctx context.Context, req ctrl.Requ
 		},
 		Spec: v1alpha1.PVCBackupSpec{
 			PVCName: pvc.Name,
-			TTL:     metav1.Duration{Duration: time.Hour},
+			TTL:     metav1.Duration{Duration: DefaultTTL},
 		},
 	}
 	if err := ctrl.SetControllerReference(&pvc, newBackup, r.Scheme); err != nil {
