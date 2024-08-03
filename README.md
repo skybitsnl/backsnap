@@ -229,14 +229,16 @@ minikube` in order to run the tests again.
 This project uses goreleaser. If you have local changes, you can use
 `goreleaser build --snapshot --clean` to create new binaries in `dist/`. If you
 need Docker images, you can run `goreleaser release --snapshot --clean` which
-will create them locally. You can then use `docker image tag` to give them new
-names and push them to a private registry as such:
+will create them locally. If you want to test them on a Kubernetes cluster, you
+should push them to a (private) registry writable by you and readable from your
+cluster. You can use the `retag-images-for-test.sh` script for this, e.g.:
 
 ```
-$ docker tag sjorsgielen/backsnap:latest-arm64 my-private-registry/backsnap:latest-arm64
-$ docker tag sjorsgielen/backsnap:latest-amd64 my-private-registry/backsnap:latest-amd64
-$ docker push my-private-registry/backsnap:latest-arm64
-$ docker push my-private-registry/backsnap:latest-amd64
-$ docker manifest create my-private-registry/backsnap:latest --amend my-private-registry/backsnap:latest-arm64 --amend my-private-registry/backsnap:latest-amd64
-$ docker manifest push my-private-registry/backsnap:latest
+$ goreleaser release --snapshot --clean
+$ ./retag-images-for-test.sh --push my-private-registry/backsnap:test-new-feature
+$ kubectl set image -n backsnap deployment/backsnap-operator manager=my-private-registry/backsnap:test-new-feature
 ```
+
+Note, on subsequent runs, that the last command does nothing if the image is
+already set to that value. If you just pushed a new image with the same name,
+ensure that the imagePullPolicy is set to Always and simply delete the Pod.
