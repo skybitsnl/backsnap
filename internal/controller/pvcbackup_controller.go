@@ -2,6 +2,7 @@ package controller
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"time"
 
@@ -15,6 +16,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/wait"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -414,6 +416,20 @@ func (r *PVCBackupReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	if err := r.Status().Update(ctx, &backup); err != nil {
 		logger.ErrorContext(ctx, "failed to update PVCBackup", slog.Any("err", err))
 		return ctrl.Result{}, err
+	}
+
+	// At this point the status is updated at the k8s API, but our own cache may
+	// be outdated. See:
+	// https://github.com/kubernetes-sigs/controller-runtime/issues/1464
+	// Therefore, we poll the object until we see it updated on our end as well,
+	// before continuing.
+	if err := wait.PollUntilContextTimeout(ctx, 100*time.Millisecond, 2*time.Second, true, func(ctx context.Context) (bool, error) {
+		if err := r.Get(ctx, req.NamespacedName, &backup); err != nil {
+			return false, err
+		}
+		return backup.Status.FinishedAt != nil && !backup.Status.FinishedAt.Time.IsZero(), nil
+	}); err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to wait for PVCBackup Status to be updated: %w", err)
 	}
 
 	delete(r.CurrentRunningBackups, qualifiedName)
