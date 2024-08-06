@@ -1,6 +1,6 @@
 apiVersion: v2
 name: backsnap
-description: A Helm chart for Kubernetes
+description: Kubernetes backup operator - off-site point-in-time backups with history
 
 # A chart can be either an 'application' or a 'library' chart.
 #
@@ -15,7 +15,7 @@ type: application
 # This is the chart version. This version number should be incremented each time you make changes
 # to the chart and its templates, including the app version.
 # Versions are expected to follow Semantic Versioning (https://semver.org/)
-version: 0.7.0
+version: 0.7.1
 
 # This is the version number of the application being deployed. This version number should be
 # incremented each time you make changes to the application. Versions are not expected to
@@ -24,4 +24,4 @@ version: 0.7.0
 appVersion: "v0.7.0"
 
 # APP_VERSION: 0.7
-# CHART_PATCH: 0
+# CHART_PATCH: 1
