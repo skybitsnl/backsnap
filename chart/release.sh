@@ -1,6 +1,6 @@
 #!/bin/bash
 
-pushd repo
-helm package ..
+pushd ../docs
+helm package ../chart
 helm repo index .
 popd
