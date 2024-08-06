@@ -2,6 +2,8 @@
 
 *Backsnap: kubernetes backups, chiropractor approved!*
 
+[![Artifact Hub](https://img.shields.io/endpoint?url=https://artifacthub.io/badge/repository/backsnap)](https://artifacthub.io/packages/search?repo=backsnap)
+
 Backsnap helps performing off-site backups of persistent volumes in a Kubernetes
 cluster, for use in your disaster recovery scenarios.
 
