@@ -2,6 +2,7 @@ package controller
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"time"
 
@@ -73,8 +74,13 @@ func (r *PVCRestoreReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		return ctrl.Result{}, nil
 	}
 
-	if restore.Spec.TargetPVC == "" {
-		restore.Spec.TargetPVC = restore.Spec.SourcePVC
+	targetPvc := restore.Spec.TargetPVC
+	if targetPvc == "" {
+		targetPvc = restore.Spec.SourcePVC
+	}
+	if targetPvc == "" {
+		logger.ErrorContext(ctx, "failed to start backup without source PVC")
+		return ctrl.Result{}, fmt.Errorf("failed to start backup without source PVC")
 	}
 
 	if restore.Status.StartedAt == nil {
@@ -90,7 +96,7 @@ func (r *PVCRestoreReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	var pvc corev1.PersistentVolumeClaim
 	if err := r.Get(ctx, types.NamespacedName{
 		Namespace: req.Namespace,
-		Name:      restore.Spec.TargetPVC,
+		Name:      targetPvc,
 	}, &pvc); err != nil {
 		if !apierrors.IsNotFound(err) {
 			logger.ErrorContext(ctx, "unable to fetch PVC", slog.Any("err", err))
@@ -101,13 +107,19 @@ func (r *PVCRestoreReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		if r.BackupSettings.StorageClass != "" {
 			storageClass = &r.BackupSettings.StorageClass
 		}
+		annotations := make(map[string]string, len(restore.Spec.Annotations)+1)
+		for k, v := range restore.Spec.Annotations {
+			annotations[k] = v
+		}
+		// Allow the restore job to restart on this PVC during this restore only.
+		annotations[CurrentlyRestoringAnnotation] = string(restore.UID)
+
 		pvc = corev1.PersistentVolumeClaim{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      restore.Spec.TargetPVC,
-				Namespace: req.Namespace,
-				Annotations: map[string]string{
-					CurrentlyRestoringAnnotation: string(restore.UID),
-				},
+				Name:        targetPvc,
+				Namespace:   req.Namespace,
+				Labels:      restore.Spec.Labels,
+				Annotations: annotations,
 			},
 			Spec: corev1.PersistentVolumeClaimSpec{
 				StorageClassName: storageClass,
@@ -160,20 +172,33 @@ func (r *PVCRestoreReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 			restore.Spec.SourceSnapshot = "latest"
 		}
 
+		annotations := make(map[string]string, len(restore.Spec.Annotations)+1)
+		for k, v := range restore.Spec.Annotations {
+			annotations[k] = v
+		}
+		// Allow the restore job to recognize this Job during this restore only.
+		annotations[CurrentlyRestoringAnnotation] = string(restore.UID)
+
 		job = batchv1.Job{
 			ObjectMeta: metav1.ObjectMeta{
-				Namespace: restore.Namespace,
-				Name:      restore.Name,
-				Annotations: map[string]string{
-					CurrentlyRestoringAnnotation: string(restore.UID),
-				},
+				Namespace:   restore.Namespace,
+				Name:        restore.Name,
+				Labels:      restore.Spec.Labels,
+				Annotations: annotations,
 			},
 			Spec: batchv1.JobSpec{
 				BackoffLimit: lo.ToPtr(int32(4)),
 				Template: corev1.PodTemplateSpec{
+					ObjectMeta: metav1.ObjectMeta{
+						Labels:      restore.Spec.Labels,
+						Annotations: restore.Spec.Annotations,
+					},
 					Spec: corev1.PodSpec{
-						ImagePullSecrets: imagePullSecrets,
-						RestartPolicy:    "OnFailure",
+						ImagePullSecrets:  imagePullSecrets,
+						RestartPolicy:     "OnFailure",
+						NodeSelector:      restore.Spec.NodeSelector,
+						Tolerations:       restore.Spec.Tolerations,
+						PriorityClassName: restore.Spec.PriorityClassName,
 						Volumes: []corev1.Volume{{
 							Name: "data",
 							VolumeSource: corev1.VolumeSource{

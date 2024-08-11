@@ -221,8 +221,10 @@ func (r *PVCBackupReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 
 		snapshot = volumesnapshotv1.VolumeSnapshot{
 			ObjectMeta: metav1.ObjectMeta{
-				Namespace: backup.Namespace,
-				Name:      backup.Name,
+				Namespace:   backup.Namespace,
+				Name:        backup.Name,
+				Labels:      backup.Spec.Labels,
+				Annotations: backup.Spec.Annotations,
 			},
 			Spec: volumesnapshotv1.VolumeSnapshotSpec{
 				Source: volumesnapshotv1.VolumeSnapshotSource{
@@ -271,14 +273,21 @@ func (r *PVCBackupReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		if r.BackupSettings.StorageClass != "" {
 			storageClass = &r.BackupSettings.StorageClass
 		}
+		annotations := make(map[string]string, len(backup.Spec.Annotations)+1)
+		for k, v := range backup.Spec.Annotations {
+			annotations[k] = v
+		}
+		// Prevent the backup of this temporary PVC
+		annotations[BackupScheduleAnnotation] = ""
+
 		snapshotPvc = corev1.PersistentVolumeClaim{
 			ObjectMeta: metav1.ObjectMeta{
-				Namespace: backup.Namespace,
-				Name:      backup.Name,
-				Annotations: map[string]string{
-					BackupScheduleAnnotation: "",
-				},
+				Namespace:   backup.Namespace,
+				Name:        backup.Name,
+				Labels:      backup.Spec.Labels,
+				Annotations: annotations,
 			},
+
 			Spec: corev1.PersistentVolumeClaimSpec{
 				StorageClassName: storageClass,
 				DataSource: &corev1.TypedLocalObjectReference{
@@ -323,15 +332,24 @@ func (r *PVCBackupReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 
 		job = batchv1.Job{
 			ObjectMeta: metav1.ObjectMeta{
-				Namespace: backup.Namespace,
-				Name:      backup.Name,
+				Namespace:   backup.Namespace,
+				Name:        backup.Name,
+				Labels:      backup.Spec.Labels,
+				Annotations: backup.Spec.Annotations,
 			},
 			Spec: batchv1.JobSpec{
 				BackoffLimit: lo.ToPtr(int32(4)),
 				Template: corev1.PodTemplateSpec{
+					ObjectMeta: metav1.ObjectMeta{
+						Labels:      backup.Spec.Labels,
+						Annotations: backup.Spec.Annotations,
+					},
 					Spec: corev1.PodSpec{
-						ImagePullSecrets: imagePullSecrets,
-						RestartPolicy:    "OnFailure",
+						ImagePullSecrets:  imagePullSecrets,
+						RestartPolicy:     "OnFailure",
+						NodeSelector:      backup.Spec.NodeSelector,
+						Tolerations:       backup.Spec.Tolerations,
+						PriorityClassName: backup.Spec.PriorityClassName,
 						Volumes: []corev1.Volume{{
 							Name: "data",
 							VolumeSource: corev1.VolumeSource{

@@ -1,6 +1,7 @@
 package v1alpha1
 
 import (
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -25,6 +26,37 @@ type PVCRestoreSpec struct {
 	// The size of the target PVC. Must be large enough to contain the backup's
 	// contents.
 	TargetPVCSize resource.Quantity `json:"targetPvcSize,omitempty"`
+
+	// NodeSelector is a selector which must be true for the restore Pod to fit
+	// on a node. This can be used e.g. to select which type of node, or which
+	// Availability Zone, performs a restore. This, in turn, may also determine
+	// in which Availability Zone the restored volume is created.
+	// More info: https://kubernetes.io/docs/concepts/configuration/assign-pod-node/
+	// +optional
+	// +mapType=atomic
+	NodeSelector map[string]string `json:"nodeSelector,omitempty"`
+
+	// If specified, the restore Pod's tolerations.
+	// +optional
+	// +listType=atomic
+	Tolerations []corev1.Toleration `json:"tolerations,omitempty"`
+
+	// If specified, indicates the restore Pod's priority.
+	// +optional
+	PriorityClassName string `json:"priorityClassName,omitempty"`
+
+	// If specified, indicates the labels to be put on the restored PVC, restore
+	// Job and restore Pod.
+	// More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/labels
+	// +optional
+	Labels map[string]string `json:"labels,omitempty"`
+
+	// If specified, indicates the annotations to be put on the restored PVC,
+	// restore Job and restore Pod. This SHOULD NOT include any backsnap.skyb.it
+	// annotations.
+	// More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/annotations
+	// +optional
+	Annotations map[string]string `json:"annotations,omitempty"`
 }
 
 // PVCRestoreStatus defines the observed state of PVCRestore

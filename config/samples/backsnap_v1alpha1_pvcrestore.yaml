@@ -12,3 +12,33 @@ spec:
 
   targetPvc: "my-restored-data"
   targetPvcSize: "1Gi"
+
+  # NodeSelector is a selector which must be true for the restore Pod to fit
+  # on a node. This can be used e.g. to select which type of node, or which
+  # Availability Zone, performs a restore. This, in turn, may also determine
+  # in which Availability Zone the restored volume is created.
+  #nodeSelector:
+  #  topology.kubernetes.io/zone: nl-ams-2
+
+  # If specified, the restore Pod's tolerations.
+  #tolerations:
+  #- key: "node-role.kubernetes.io/master"
+  #  operator: "Equal"
+  #  value: "true"
+  #  effect: "NoSchedule"
+
+  # If specified, indicates the restore Pod's priority.
+  #priorityClassName: "system-cluster-critical"
+
+  # If specified, indicates the labels to be put on the restored PVC, restore
+  # Job and restore Pod.
+  # More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/labels
+  #labels:
+  #  restored-by: me
+
+  # If specified, indicates the annotations to be put on the restored PVC,
+  # restore Job and restore Pod. This SHOULD NOT include any backsnap.skyb.it
+  # annotations.
+  # More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/annotations
+  #annotations:
+  #  restored-by: me

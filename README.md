@@ -244,3 +244,12 @@ $ kubectl set image -n backsnap deployment/backsnap-operator manager=my-private-
 Note, on subsequent runs, that the last command does nothing if the image is
 already set to that value. If you just pushed a new image with the same name,
 ensure that the imagePullPolicy is set to Always and simply delete the Pod.
+
+Also, the commands above do not update the CRDs, so you may need to update them
+manually:
+
+```
+$ make
+$ kubectl apply -f config/crd/bases/backsnap.skyb.it_pvcbackups.yaml
+$ kubectl apply -f config/crd/bases/backsnap.skyb.it_pvcrestores.yaml
+```
