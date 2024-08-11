@@ -14,7 +14,24 @@ spec:
     singular: pvcbackup
   scope: Namespaced
   versions:
-  - name: v1alpha1
+  - additionalPrinterColumns:
+    - description: Time the backup was requested
+      jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    - description: Time the backup job started running
+      jsonPath: .status.startedAt
+      name: Started at
+      type: string
+    - description: Time the backup job took to finish running
+      jsonPath: .status.duration
+      name: Duration
+      type: string
+    - description: Shows whether the backup succeeded or not
+      jsonPath: .status.result
+      name: Result
+      type: string
+    name: v1alpha1
     schema:
       openAPIV3Schema:
         description: PVCBackup is the Schema for the pvcbackups API
@@ -38,21 +55,92 @@ spec:
             type: object
           spec:
             properties:
+              annotations:
+                additionalProperties:
+                  type: string
+                description: |-
+                  If specified, indicates the annotations to be put on the backup
+                  VolumeSnapshot, backup temporary PVC, backup Job and backup Pod. This
+                  SHOULD NOT include any backsnap.skyb.it annotations.
+                  More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/annotations
+                type: object
+              labels:
+                additionalProperties:
+                  type: string
+                description: |-
+                  If specified, indicates the labels to be put on the backup
+                  VolumeSnapshot, backup temporary PVC, backup Job and backup Pod.
+                  More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/labels
+                type: object
+              nodeSelector:
+                additionalProperties:
+                  type: string
+                description: |-
+                  NodeSelector is a selector which must be true for the backup Pod to fit
+                  on a node. This can be used e.g. to select which type of node, or which
+                  Availability Zone, performs a backup.
+                  More info: https://kubernetes.io/docs/concepts/configuration/assign-pod-node/
+                type: object
+                x-kubernetes-map-type: atomic
+              priorityClassName:
+                description: If specified, indicates the backup Pod's priority.
+                type: string
               pvc:
                 description: Name of the PVC to back up. Must be in the same namespace.
                 type: string
+              tolerations:
+                description: If specified, the backup Pod's tolerations.
+                items:
+                  description: |-
+                    The pod this Toleration is attached to tolerates any taint that matches
+                    the triple <key,value,effect> using the matching operator <operator>.
+                  properties:
+                    effect:
+                      description: |-
+                        Effect indicates the taint effect to match. Empty means match all taint effects.
+                        When specified, allowed values are NoSchedule, PreferNoSchedule and NoExecute.
+                      type: string
+                    key:
+                      description: |-
+                        Key is the taint key that the toleration applies to. Empty means match all taint keys.
+                        If the key is empty, operator must be Exists; this combination means to match all values and all keys.
+                      type: string
+                    operator:
+                      description: |-
+                        Operator represents a key's relationship to the value.
+                        Valid operators are Exists and Equal. Defaults to Equal.
+                        Exists is equivalent to wildcard for value, so that a pod can
+                        tolerate all taints of a particular category.
+                      type: string
+                    tolerationSeconds:
+                      description: |-
+                        TolerationSeconds represents the period of time the toleration (which must be
+                        of effect NoExecute, otherwise this field is ignored) tolerates the taint. By default,
+                        it is not set, which means tolerate the taint forever (do not evict). Zero and
+                        negative values will be treated as 0 (evict immediately) by the system.
+                      format: int64
+                      type: integer
+                    value:
+                      description: |-
+                        Value is the taint value the toleration matches to.
+                        If the operator is Exists, the value should be empty, otherwise just a regular string.
+                      type: string
+                  type: object
+                type: array
+                x-kubernetes-list-type: atomic
               ttl:
                 description: |-
                   How long will the backup object be retained after the backup completes.
-                  If not set, the object will be retained for at least one day. The
-                  controller will also always keep the last PVCBackup for a particular PVC
-                  around, so that it knows when the last backup was completed.
+                  The controller will also always keep the last PVCBackup for a particular
+                  PVC around, so that it knows when the last backup was completed.
                 type: string
             required:
             - pvc
             type: object
           status:
             properties:
+              duration:
+                type: string
               finishedAt:
                 format: date-time
                 type: string
