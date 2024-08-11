@@ -77,6 +77,14 @@ func (r *PVCRestoreReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		restore.Spec.TargetPVC = restore.Spec.SourcePVC
 	}
 
+	if restore.Status.StartedAt == nil {
+		restore.Status.StartedAt = lo.ToPtr(metav1.Time{Time: time.Now()})
+		if err := r.Status().Update(ctx, &restore); err != nil {
+			logger.ErrorContext(ctx, "failed to update PVCRestore", slog.Any("err", err))
+			return ctrl.Result{}, err
+		}
+	}
+
 	// The PVC must either not exist, or be marked as "restoring" with the UID
 	// of the PVCRestore object, otherwise we error out here
 	var pvc corev1.PersistentVolumeClaim
@@ -123,8 +131,7 @@ func (r *PVCRestoreReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 
 	if uid, ok := pvc.ObjectMeta.Annotations[CurrentlyRestoringAnnotation]; !ok || uid != string(restore.UID) {
 		logger.ErrorContext(ctx, "PVC to restore to already exists - refusing to reconcile")
-		restore.Status.FinishedAt = lo.ToPtr(metav1.Time{Time: time.Now()})
-		restore.Status.Result = lo.ToPtr[backsnapv1alpha1.Result]("Failed")
+		setRestoreFinished(&restore, "Failed")
 		if err := r.Status().Update(ctx, &restore); err != nil {
 			logger.ErrorContext(ctx, "Failed to update PVCRestore", slog.Any("err", err))
 			return ctrl.Result{}, err
@@ -236,8 +243,7 @@ func (r *PVCRestoreReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 
 	if uid, ok := job.ObjectMeta.Annotations[CurrentlyRestoringAnnotation]; !ok || uid != string(restore.UID) {
 		logger.ErrorContext(ctx, "Restore job already exists - refusing to reconcile")
-		restore.Status.FinishedAt = lo.ToPtr(metav1.Time{Time: time.Now()})
-		restore.Status.Result = lo.ToPtr[backsnapv1alpha1.Result]("Failed")
+		setRestoreFinished(&restore, "Failed")
 		if err := r.Status().Update(ctx, &restore); err != nil {
 			logger.ErrorContext(ctx, "Failed to update PVCRestore", slog.Any("err", err))
 			return ctrl.Result{}, err
@@ -264,8 +270,7 @@ func (r *PVCRestoreReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	delete(pvc.ObjectMeta.Annotations, CurrentlyRestoringAnnotation)
 	if err := r.Update(ctx, &pvc); err != nil {
 		logger.ErrorContext(ctx, "Failed to remove annotation from PVC", slog.Any("err", err))
-		restore.Status.FinishedAt = lo.ToPtr(metav1.Time{Time: time.Now()})
-		restore.Status.Result = lo.ToPtr[backsnapv1alpha1.Result]("Failed")
+		setRestoreFinished(&restore, "Failed")
 		if err := r.Status().Update(ctx, &restore); err != nil {
 			logger.ErrorContext(ctx, "Failed to update PVCRestore", slog.Any("err", err))
 			return ctrl.Result{}, err
@@ -273,13 +278,20 @@ func (r *PVCRestoreReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		return ctrl.Result{}, nil
 	}
 
-	restore.Status.FinishedAt = lo.ToPtr(metav1.Time{Time: time.Now()})
-	restore.Status.Result = lo.ToPtr[backsnapv1alpha1.Result]("Succeeded")
+	setRestoreFinished(&restore, "Succeeded")
 	if err := r.Status().Update(ctx, &restore); err != nil {
 		logger.ErrorContext(ctx, "Failed to update PVCRestore", slog.Any("err", err))
 		return ctrl.Result{}, err
 	}
 	return ctrl.Result{}, nil
+}
+
+func setRestoreFinished(restore *backsnapv1alpha1.PVCRestore, result backsnapv1alpha1.Result) {
+	restore.Status.FinishedAt = lo.ToPtr(metav1.Time{Time: time.Now()})
+	duration := restore.Status.FinishedAt.Sub(restore.Status.StartedAt.Time)
+	duration = duration.Round(time.Second)
+	restore.Status.Duration = lo.ToPtr(metav1.Duration{Duration: duration})
+	restore.Status.Result = lo.ToPtr[backsnapv1alpha1.Result](result)
 }
 
 // SetupWithManager sets up the controller with the Manager.

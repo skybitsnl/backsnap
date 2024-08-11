@@ -23,9 +23,10 @@ type PVCBackupSpec struct {
 type Result string
 
 type PVCBackupStatus struct {
-	StartedAt  *metav1.Time `json:"startedAt,omitempty"`
-	FinishedAt *metav1.Time `json:"finishedAt,omitempty"`
-	Result     *Result      `json:"result,omitempty"`
+	StartedAt  *metav1.Time     `json:"startedAt,omitempty"`
+	FinishedAt *metav1.Time     `json:"finishedAt,omitempty"`
+	Duration   *metav1.Duration `json:"duration,omitempty"`
+	Result     *Result          `json:"result,omitempty"`
 }
 
 //+kubebuilder:object:root=true

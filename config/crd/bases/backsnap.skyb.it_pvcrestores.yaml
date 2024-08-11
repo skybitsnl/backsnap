@@ -73,6 +73,8 @@ spec:
           status:
             description: PVCRestoreStatus defines the observed state of PVCRestore
             properties:
+              duration:
+                type: string
               finishedAt:
                 format: date-time
                 type: string
@@ -80,6 +82,9 @@ spec:
                 enum:
                 - Succeeded
                 - Failed
+                type: string
+              startedAt:
+                format: date-time
                 type: string
             type: object
         type: object

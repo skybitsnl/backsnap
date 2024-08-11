@@ -53,6 +53,8 @@ spec:
             type: object
           status:
             properties:
+              duration:
+                type: string
               finishedAt:
                 format: date-time
                 type: string

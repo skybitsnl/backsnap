@@ -407,8 +407,7 @@ func (r *PVCBackupReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	logger.InfoContext(ctx, "backup job succeeded",
 		slog.String("name", job.Name),
 	)
-	backup.Status.FinishedAt = lo.ToPtr(metav1.Time{Time: time.Now()})
-	backup.Status.Result = lo.ToPtr[v1alpha1.Result]("Succeeded")
+	setBackupFinished(&backup, "Succeeded")
 
 	// After setting FinishedAt, and before actually performing the Update
 	time.Sleep(time.Duration(r.SleepBetweenBackups) * time.Second)
@@ -436,6 +435,14 @@ func (r *PVCBackupReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 
 	// Reconcile ourselves immediately to clean up
 	return ctrl.Result{Requeue: true}, nil
+}
+
+func setBackupFinished(backup *v1alpha1.PVCBackup, result v1alpha1.Result) {
+	backup.Status.FinishedAt = lo.ToPtr(metav1.Time{Time: time.Now()})
+	duration := backup.Status.FinishedAt.Sub(backup.Status.StartedAt.Time)
+	duration = duration.Round(time.Second)
+	backup.Status.Duration = lo.ToPtr(metav1.Duration{Duration: duration})
+	backup.Status.Result = lo.ToPtr[v1alpha1.Result](result)
 }
 
 func backupIsRunning(backup v1alpha1.PVCBackup) bool {
