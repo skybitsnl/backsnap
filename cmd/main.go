@@ -43,8 +43,8 @@ var (
 	maxRunningBackups     = flag.Int("max-running-backups", 1, "Maximum amount of backups to run simultaneously")
 	sleepBetweenBackups   = flag.Int("sleep-between-backups", 30, "Seconds to sleep between backing up of each PVC")
 
-	snapshotClassFlag = flag.String("snapshotclass", "", "volumeSnapshotClassName")
-	volumeClassFlag   = flag.String("volumeclass", "", "volumeClassName")
+	snapshotClassFlag = flag.String("snapshotclass", "", "name of the VolumeSnapshotClass to use")
+	storageClassFlag  = flag.String("storageclass", "", "name fo the StorageClass to use")
 	imagePullSecret   = flag.String("imagepullsecret", "", "imagePullSecret to pass to backup Pod (optional)")
 	image             = flag.String("image", "sjorsgielen/backsnap-restic:latest-main", "Restic back-up image")
 	s3Host            = flag.String("s3-host", "", "S3 hostname (can be host, host:port or http://host:port/)")
@@ -142,7 +142,7 @@ func main() {
 
 	backupSettings := controller.BackupSettings{
 		SnapshotClass:     *snapshotClassFlag,
-		VolumeClass:       *volumeClassFlag,
+		StorageClass:      *storageClassFlag,
 		ImagePullSecret:   *imagePullSecret,
 		Image:             *image,
 		S3Host:            *s3Host,

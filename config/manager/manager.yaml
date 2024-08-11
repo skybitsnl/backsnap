@@ -75,7 +75,7 @@ spec:
         # The storage class name set here is used for all PVCs created by Backsnap
         # both while creating a back-up and while restoring one. Otherwise, the
         # cluster default storage class is used.
-        # - --volumeclass
+        # - -storageclass
         # - csi-block
 
         # The location and credentials of the S3 bucket where backups will be stored.

@@ -1,7 +1,7 @@
 {{- $s3Host := .Values.app.s3.host | required ".Values.app.s3.host is required." -}}
 {{- $s3Bucket := .Values.app.s3.bucket | required ".Values.app.s3.bucket is required." -}}
-{{- $s3AccessKey := .Values.app.s3.accesskey | required ".Values.app.s3.accesskey is required." -}}
-{{- $s3SecretKey := .Values.app.s3.secretkey | required ".Values.app.s3.secretkey is required." -}}
+{{- $s3AccessKey := .Values.app.s3.accessKey | required ".Values.app.s3.accessKey is required." -}}
+{{- $s3SecretKey := .Values.app.s3.secretKey | required ".Values.app.s3.secretKey is required." -}}
 {{- $resticPassword := .Values.app.restic.password | required ".Values.app.restic.password is required." -}}
 ---
 apiVersion: apps/v1
@@ -94,19 +94,19 @@ spec:
         # volume snapshot class name is used.
         # - --snapshotclass
         # - csi-snapshot
-        {{- if .Values.app.snapshotclass }}
+        {{- if .Values.app.snapshotClass }}
         - --snapshotclass
-        - {{ .Values.app.snapshotclass }}
+        - {{ .Values.app.snapshotClass }}
         {{- end }}
 
         # The storage class name set here is used for all PVCs created by Backsnap
         # both while creating a back-up and while restoring one. Otherwise, the
         # cluster default storage class is used.
-        # - --volumeclass
+        # - --storageclass
         # - csi-block
-        {{- if .Values.app.volumeclass }}
-        - --volumeclass
-        - {{ .Values.app.volumeclass }}
+        {{- if .Values.app.storageClass }}
+        - --storageclass
+        - {{ .Values.app.storageClass }}
         {{- end }}
 
         # The location and credentials of the S3 bucket where backups will be stored.

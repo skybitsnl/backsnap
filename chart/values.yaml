@@ -43,12 +43,12 @@ app:
   schedule: "@daily"
   # Default is nothing to run backsnap in automatic mode
   manual: ""
-  snapshotclass: ""
-  volumeclass: ""
+  snapshotClass: ""
+  storageClass: ""
   s3:
     host: ""
     bucket: ""
-    accesskey: ""
-    secretkey: ""
+    accessKey: ""
+    secretKey: ""
   restic:
     password: ""

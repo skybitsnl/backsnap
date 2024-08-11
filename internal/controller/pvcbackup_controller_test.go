@@ -149,7 +149,7 @@ var _ = Describe("PVCBackup and PVCRestore controller", func() {
 
 		backupSettings := BackupSettings{
 			SnapshotClass: snapshotClassName,
-			VolumeClass:   storageClassName,
+			StorageClass:  storageClassName,
 			// default restic image
 			ImagePullSecret: "",
 			Image:           "sjorsgielen/backsnap-restic:latest-main",

@@ -89,9 +89,9 @@ func (r *PVCRestoreReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 			return ctrl.Result{}, err
 		}
 
-		var volumeClass *string
-		if r.BackupSettings.VolumeClass != "" {
-			volumeClass = &r.BackupSettings.VolumeClass
+		var storageClass *string
+		if r.BackupSettings.StorageClass != "" {
+			storageClass = &r.BackupSettings.StorageClass
 		}
 		pvc = corev1.PersistentVolumeClaim{
 			ObjectMeta: metav1.ObjectMeta{
@@ -102,7 +102,7 @@ func (r *PVCRestoreReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 				},
 			},
 			Spec: corev1.PersistentVolumeClaimSpec{
-				StorageClassName: volumeClass,
+				StorageClassName: storageClass,
 				AccessModes:      []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
 				Resources: corev1.VolumeResourceRequirements{
 					Requests: map[corev1.ResourceName]resource.Quantity{
