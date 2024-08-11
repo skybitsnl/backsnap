@@ -31,6 +31,10 @@ type PVCBackupStatus struct {
 
 //+kubebuilder:object:root=true
 //+kubebuilder:subresource:status
+//+kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp",description="Time the backup was requested"
+//+kubebuilder:printcolumn:name="Started at",type="string",JSONPath=".status.startedAt",description="Time the backup job started running"
+//+kubebuilder:printcolumn:name="Duration",type="string",JSONPath=".status.duration",description="Time the backup job took to finish running"
+//+kubebuilder:printcolumn:name="Result",type="string",JSONPath=".status.result",description="Shows whether the backup succeeded or not"
 
 // PVCBackup is the Schema for the pvcbackups API
 type PVCBackup struct {

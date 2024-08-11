@@ -14,7 +14,24 @@ spec:
     singular: pvcbackup
   scope: Namespaced
   versions:
-  - name: v1alpha1
+  - additionalPrinterColumns:
+    - description: Time the backup was requested
+      jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    - description: Time the backup job started running
+      jsonPath: .status.startedAt
+      name: Started at
+      type: string
+    - description: Time the backup job took to finish running
+      jsonPath: .status.duration
+      name: Duration
+      type: string
+    - description: Shows whether the backup succeeded or not
+      jsonPath: .status.result
+      name: Result
+      type: string
+    name: v1alpha1
     schema:
       openAPIV3Schema:
         description: PVCBackup is the Schema for the pvcbackups API
