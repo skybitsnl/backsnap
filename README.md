@@ -4,8 +4,11 @@
 
 [![Artifact Hub](https://img.shields.io/endpoint?url=https://artifacthub.io/badge/repository/backsnap)](https://artifacthub.io/packages/search?repo=backsnap)
 
-Backsnap helps performing off-site backups of persistent volumes in a Kubernetes
+Backsnap performs backups of persistent volumes (PV/PVC) in a Kubernetes
 cluster, for use in your disaster recovery scenarios.
+
+It is unique in supporting point-in-time VolumeSnapshots, then making incremental
+off-site backups of those using `restic`.
 
 Backsnap by default assumes that all PVCs in your cluster should be backed up.
 No per-PVC object is necessary to start backing up any data. You can change this
@@ -28,7 +31,7 @@ flag), you create PVCBackup objects in the same namespace as a PVC you want to
 be backed up. The operator reacts to this by creating a snapshot, a
 point-in-time PVC and a Job to perform the backup, and cleans up afterwards. In
 automatic mode, the operator creates PVCBackup objects automatically according
-to schedule.
+to schedule (you can still also create your own).
 
 The automatic schedule can be adjusted using a `backsnap.skyb.it/schedule`
 annotation on the target PVC or target namespace. By setting the annotation to
@@ -39,6 +42,62 @@ backups (this is the same as setting `-manual`, unless any PVCs or
 namespaces do have an overriding schedule set).
 
 ## Getting started
+
+### Quick start using Helm
+
+```
+helm repo add backsnap https://skybitsnl.github.io/backsnap
+helm install --create-namespace --namespace backsnap backsnap -f values.yaml
+```
+
+An example `values.yaml` follows. For more configuration options, see the
+["Default values" page on ArtifactHub](https://artifacthub.io/packages/helm/backsnap/backsnap?modal=values).
+
+```
+app:
+  # In the default configuration for Backsnap, it creates a daily backup for all
+  # PVCs in the cluster, starting immediately. In this example configuration, we
+  # configure a single namespace instead, which causes it to back up only that
+  # namespace. In order to back up the entire cluster state, it is recommended
+  # not to configure any namespaces here, but configure per-namespace schedules
+  # accordingly using annotations on the namespace or PVC.
+  namespaces:
+    allow: ["my-app"]
+
+  # Default schedule for all PVCs within scope, unless overridden per namespace or
+  # per PVC. The default is @daily, but any crontab syntax is supported.
+  # See https://crontab.guru/ for examples and explanations.
+  #schedule: "@daily"
+
+  # Snapshot class, if no cluster-wide default is configured or you prefer
+  # another one
+  snapshotClass: ""
+
+  # Storage class, if no cluster-wide default is configured or you prefer
+  # another one
+  storageClass: ""
+
+  # S3 backup destination configuration
+  s3:
+    host: ""
+    bucket: ""
+    accessKey: ""
+    secretKey: ""
+
+  # Restic configuration
+  restic:
+    password: ""
+```
+
+After this, you can observe your backups and their status using:
+
+```
+kubectl get pvcbackup -A
+```
+
+See below on how to create your own PVCBackups, and restoring with PVCRestores.
+
+### Manual installation with kubectl
 
 First, import the Backsnap CRDs:
 
@@ -100,11 +159,40 @@ Then, deploy it:
 kubectl apply -f manager.yaml
 ```
 
-In automatic mode, PVCBackup objects will be created immediately. You can list them
-using `kubectl get pvcbackup -A` and in the logs of the operator.
+After this, you can observe your backups and their status using:
 
-In manual mode, you can tell the operator to start the backup of a specific PVC by
-submitting a CR like the one in `config/samples/backsnap_v1alpha1_pvcbackup.yaml`:
+```
+kubectl get pvcbackup -A
+```
+
+See below on how to create your own PVCBackups, and restoring with PVCRestores.
+
+#### To uninstall
+
+Stop the manager, the namespace, cluster roles and the CRDs created above:
+
+```sh
+kubectl delete deployment -n backsnap backsnap-operator
+kubectl delete namespace backsnap
+kubectl delete clusterrole backsnap-manager
+
+kubectl delete -f https://raw.githubusercontent.com/skybitsnl/backsnap/main/config/crd/bases/backsnap.skyb.it_pvcbackups.yaml
+kubectl delete -f https://raw.githubusercontent.com/skybitsnl/backsnap/main/config/crd/bases/backsnap.skyb.it_pvcrestores.yaml
+```
+
+## How to use it
+
+In the default and recommended configuration, Backsnap automatically creates
+PVCBackups on the configured schedule. You can override this schedule per
+namespace and per PVC. The recommended way to do this is per namespace, e.g.
+you can set your prod namespaces schedule to back up hourly and your testing
+namespaces to an empty schedule to disable back-ups altogether.
+
+This way, any new namespaces will be backed up automatically unless you disable
+them explicitly.
+
+You can tell the operator to start the backup of a specific PVC by submitting a
+CR like the one in `config/samples/backsnap_v1alpha1_pvcbackup.yaml`:
 
 ```
 apiVersion: backsnap.skyb.it/v1alpha1
@@ -121,18 +209,42 @@ You'll see that a VolumeSnapshot, PVC and backup Job are created in the
 `your-application` namespace and you can follow along with the operator logs to
 see its progression.
 
-## To uninstall
+Similarly, to restore a PVC from backup, create a PVCRestore object like the
+following:
 
-Stop the manager, the namespace, cluster roles and the CRDs created above:
-
-```sh
-kubectl delete deployment -n backsnap backsnap-operator
-kubectl delete namespace backsnap
-kubectl delete clusterrole backsnap-manager
-
-kubectl delete -f https://raw.githubusercontent.com/skybitsnl/backsnap/main/config/crd/bases/backsnap.skyb.it_pvcbackups.yaml
-kubectl delete -f https://raw.githubusercontent.com/skybitsnl/backsnap/main/config/crd/bases/backsnap.skyb.it_pvcrestores.yaml
 ```
+apiVersion: backsnap.skyb.it/v1alpha1
+kind: PVCRestore
+metadata:
+  name: your-data-restore
+  namespace: your-application
+spec:
+  sourcePvc: your-data
+  # By default, the sourceNamespace is the same namespace the PVCRestore
+  # is in
+  #sourceNamespace: "your-application-prod"
+  # By default, the new PVC has the same name as the sourcePvc, but
+  # you can override this
+  #targetPvc: your-data-copy
+  targetPvcSize: "10Gi"
+```
+
+For a concrete scenario of this, see
+[Migrating a PVC to another availability zone using Backsnap](docs/migrate_pvc_to_another_az.md).
+
+### Troubleshooting
+
+If your PVCBackups or PVCRestores are failing, or not even starting, use the
+following check-list to find out why:
+
+- Is the operator running? (`kubectl get pods -n backsnap`)
+- Is the operator picking up the jobs? (`kubectl logs -n backsnap deployment/backsnap`, possibly
+  `grep` by namespace and/or object name)
+- The operator will not delete the backup or restore Pods if they failed, so
+  you can see if there are errors in their logs. (`kubectl logs -n your-application job/...`)
+
+If you are still having issues after the above steps, be sure to file an issue
+here on Github.
 
 ## Security considerations
 
