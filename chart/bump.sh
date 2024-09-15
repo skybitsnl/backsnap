@@ -18,11 +18,12 @@ if [ -z "$VERSION" -o -z "$APP_PATCH" ]; then
 	exit 1
 fi
 
-# First, copy CRDs from the repo into the chart.
+# First, copy CRDs and other files from the repo into the chart.
 cp ../config/crd/bases/*.yaml templates/crd
 cp ../config/rbac/leader_election_role* templates/rbac
 cp ../config/rbac/role* templates/rbac
 cp ../config/rbac/service_account.yaml templates
+cp ../README.md .
 
 # Replace the namespaces and managed-by
 find templates -type f -exec gsed -i \
