@@ -77,6 +77,14 @@ func (r *PVCBackupReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	if err := r.Get(ctx, req.NamespacedName, &backup); err != nil {
 		if apierrors.IsNotFound(err) {
 			// ignore not-found errors since we don't need to create any PVCBackup for those
+			// if this PVCBackup was running, and it was deleted, mark it as non-running here
+			qualifiedName := backupQualifiedName(v1alpha1.PVCBackup{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: req.Namespace,
+					Name:      req.Name,
+				},
+			})
+			delete(r.CurrentRunningBackups, qualifiedName)
 			return ctrl.Result{}, nil
 		}
 		logger.ErrorContext(ctx, "unable to fetch PVCBackup", slog.Any("err", err))
