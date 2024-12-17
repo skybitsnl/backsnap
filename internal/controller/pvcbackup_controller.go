@@ -353,8 +353,17 @@ func (r *PVCBackupReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 						Annotations: backup.Spec.Annotations,
 					},
 					Spec: corev1.PodSpec{
-						ImagePullSecrets:  imagePullSecrets,
-						RestartPolicy:     "OnFailure",
+						ImagePullSecrets: imagePullSecrets,
+						// Don't restart the Pod itself. The Job controller allows 4 retries (the
+						// BackoffLimit). If we allow restarts in the Pod, then after 4 retries, the Job
+						// controller must prevent further retries and therefore deletes the Pod.
+						// Because of this, we then also lose the Pod logs, so if they weren't caught by
+						// monitoring, we lose the reason the Job failed. By setting the Pod restart
+						// policy to Never, the Pod itself only runs once. The Job controller supports
+						// this, and instead, creates new Pods for further retries, but leaves the old
+						// Pods around. With this mechanism, we get the same amount of retries, but old
+						// logs can still be inspected while the Job exists.
+						RestartPolicy:     corev1.RestartPolicyNever,
 						NodeSelector:      backup.Spec.NodeSelector,
 						Tolerations:       backup.Spec.Tolerations,
 						PriorityClassName: backup.Spec.PriorityClassName,
