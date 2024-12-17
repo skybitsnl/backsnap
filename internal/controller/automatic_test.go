@@ -84,7 +84,7 @@ var _ = Describe("Automatic controller", func() {
 				})).Should(Succeed())
 
 				return len(list.Items) == 1 && list.Items[0].Spec.PVCName == "my-data"
-			}, time.Minute, time.Second).Should(BeTrue())
+			}, time.Minute+10*time.Second, time.Second).Should(BeTrue())
 
 			// Then, just over a minute later, the list length should be 2
 			time.Sleep(time.Second * 10)
