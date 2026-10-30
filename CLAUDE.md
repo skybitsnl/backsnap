@@ -15,6 +15,17 @@ everything from "Contributing" down).
   checking with the user. Remember that commits and PRs are reviewed by a human,
   so keep them small and to-the-point. Split up commits or PRs if necessary. Keep
   refactorings in their own commits or PRs unless they are very small.
+- Tests should have a human-readable progression, so that humans can understand
+  behaviour by reading the test. Use helper functions if relevant. When to write
+  tests: for large features, when behavior becomes dangerous, when the code that
+  makes a decision is bug-prone (lots of corner cases, easy to miss factors when
+  code is refactored) or when the test is short and simple. You should strive
+  for test elegance, not for full test coverage. When in doubt, propose your
+  recommended tests to the user and let them decide.
+- While developing, if you want to test if code behaves as intended but you are
+  not writing a test for it, you may write a scratch test to validate it
+  succeeds as expected, then remove it so that it is not accidentally committed
+  into the repository.
 
 ## Layout
 
