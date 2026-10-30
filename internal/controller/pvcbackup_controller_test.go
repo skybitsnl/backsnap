@@ -61,12 +61,12 @@ var _ = Describe("PVCBackup and PVCRestore controller", func() {
 		err := k8sClient.Create(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: namespace}})
 		Expect(err).ToNot(HaveOccurred())
 
-		By("deploying MinIO in the namespace")
-		minio := &corev1.Pod{
+		By("deploying RustFS in the namespace")
+		rustfs := &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace: namespace,
-				Name:      "minio",
-				Labels:    map[string]string{"app": "minio"},
+				Name:      "rustfs",
+				Labels:    map[string]string{"app": "rustfs"},
 			},
 			Spec: corev1.PodSpec{
 				Volumes: []corev1.Volume{{
@@ -78,9 +78,16 @@ var _ = Describe("PVCBackup and PVCRestore controller", func() {
 					},
 				}},
 				Containers: []corev1.Container{{
-					Name:    "minio",
-					Image:   "quay.io/minio/minio:RELEASE.2024-03-03T17-50-39Z",
-					Command: []string{"minio", "server", "/data", "--console-address", ":9001"},
+					Name:  "rustfs",
+					Image: "rustfs/rustfs:1.0.4",
+					Args:  []string{"/data"},
+					Env: []corev1.EnvVar{{
+						Name:  "RUSTFS_ACCESS_KEY",
+						Value: "rustfsadmin",
+					}, {
+						Name:  "RUSTFS_SECRET_KEY",
+						Value: "rustfsadmin",
+					}},
 					VolumeMounts: []corev1.VolumeMount{{
 						Name:      "local",
 						ReadOnly:  false,
@@ -89,25 +96,25 @@ var _ = Describe("PVCBackup and PVCRestore controller", func() {
 				}},
 			},
 		}
-		Expect(k8sClient.Create(ctx, minio)).To(BeNil())
+		Expect(k8sClient.Create(ctx, rustfs)).To(BeNil())
 		mservice := &corev1.Service{
-			ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: "minio"},
+			ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: "rustfs"},
 			Spec: corev1.ServiceSpec{
 				Ports: []corev1.ServicePort{{
 					Port: 9000,
 				}},
 				Selector: map[string]string{
-					"app": "minio",
+					"app": "rustfs",
 				},
 			},
 		}
 		Expect(k8sClient.Create(ctx, mservice)).To(BeNil())
 		Eventually(func() bool {
-			Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(minio), minio)).To(BeNil())
-			return minio.Status.Phase == corev1.PodRunning
+			Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(rustfs), rustfs)).To(BeNil())
+			return rustfs.Status.Phase == corev1.PodRunning
 		}, time.Minute, time.Second).Should(BeTrue())
 
-		By("connecting to MinIO in the namespace")
+		By("connecting to RustFS in the namespace")
 		l, err := net.Listen("tcp", "localhost:0")
 		Expect(err).ToNot(HaveOccurred())
 		maddr := l.Addr().String()
@@ -116,7 +123,7 @@ var _ = Describe("PVCBackup and PVCRestore controller", func() {
 			defer GinkgoRecover()
 			// ensure we keep the ctx we started with, and not the next node's ctx
 			ctx := ctx
-			cmd := exec.CommandContext(ctx, "kubectl", "port-forward", "-n", namespace, "pod/minio", portFromAddr(maddr)+":9000")
+			cmd := exec.CommandContext(ctx, "kubectl", "port-forward", "-n", namespace, "pod/rustfs", portFromAddr(maddr)+":9000")
 			cmd.Stdout = GinkgoWriter
 			cmd.Stderr = GinkgoWriter
 			Expect(cmd.Start()).To(BeNil())
@@ -126,7 +133,7 @@ var _ = Describe("PVCBackup and PVCRestore controller", func() {
 			}
 		}()
 		mc, err = mclient.New(maddr, &mclient.Options{
-			Creds:  credentials.NewStaticV4("minioadmin", "minioadmin", ""),
+			Creds:  credentials.NewStaticV4("rustfsadmin", "rustfsadmin", ""),
 			Secure: false,
 		})
 		Expect(err).ToNot(HaveOccurred())
@@ -153,11 +160,11 @@ var _ = Describe("PVCBackup and PVCRestore controller", func() {
 			// default restic image
 			ImagePullSecret: "",
 			Image:           "sjorsgielen/backsnap-restic:latest-main",
-			// MinIO we just set up
-			S3Host:            "http://minio:9000",
+			// RustFS we just set up
+			S3Host:            "http://rustfs:9000",
 			S3Bucket:          mbucket,
-			S3AccessKeyId:     "minioadmin",
-			S3SecretAccessKey: "minioadmin",
+			S3AccessKeyId:     "rustfsadmin",
+			S3SecretAccessKey: "rustfsadmin",
 			// any restic password
 			ResticPassword: "resticpass",
 		}
