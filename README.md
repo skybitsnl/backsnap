@@ -77,6 +77,13 @@ app:
   # another one
   storageClass: ""
 
+  # Optionally, separate storage classes for the temporary PVCs created while
+  # making a backup, and for the PVCs created while restoring one. These take
+  # precedence over storageClass. The backup storage class must support
+  # creating volumes from volume snapshots.
+  #backupStorageClass: ""
+  #restoreStorageClass: ""
+
   # S3 backup destination configuration
   s3:
     host: ""
@@ -227,6 +234,9 @@ spec:
   # you can override this
   #targetPvc: your-data-copy
   targetPvcSize: "10Gi"
+  # By default, the new PVC uses the operator's configured restore storage
+  # class, but you can override this
+  #storageClassName: fast-ssd
 ```
 
 For a concrete scenario of this, see

@@ -102,6 +102,12 @@ spec:
                 description: The snapshot to restore, or empty to restore the latest
                   snapshot.
                 type: string
+              storageClassName:
+                description: |-
+                  If specified, the StorageClass of the target PVC. If empty, the
+                  operator's configured restore StorageClass is used, or the cluster
+                  default StorageClass if none is configured.
+                type: string
               targetPvc:
                 description: |-
                   The name of the new PVC where the source contents will be restored into.

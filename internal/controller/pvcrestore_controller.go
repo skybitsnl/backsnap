@@ -103,10 +103,7 @@ func (r *PVCRestoreReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 			return ctrl.Result{}, err
 		}
 
-		var storageClass *string
-		if r.BackupSettings.StorageClass != "" {
-			storageClass = &r.BackupSettings.StorageClass
-		}
+		storageClass := r.BackupSettings.restoreStorageClassName(restore.Spec.StorageClassName)
 		annotations := make(map[string]string, len(restore.Spec.Annotations)+1)
 		for k, v := range restore.Spec.Annotations {
 			annotations[k] = v

@@ -27,6 +27,12 @@ type PVCRestoreSpec struct {
 	// contents.
 	TargetPVCSize resource.Quantity `json:"targetPvcSize,omitempty"`
 
+	// If specified, the StorageClass of the target PVC. If empty, the
+	// operator's configured restore StorageClass is used, or the cluster
+	// default StorageClass if none is configured.
+	// +optional
+	StorageClassName string `json:"storageClassName,omitempty"`
+
 	// NodeSelector is a selector which must be true for the restore Pod to fit
 	// on a node. This can be used e.g. to select which type of node, or which
 	// Availability Zone, performs a restore. This, in turn, may also determine

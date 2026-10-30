@@ -18,6 +18,13 @@ type PVCBackupSpec struct {
 	// PVC around, so that it knows when the last backup was completed.
 	TTL metav1.Duration `json:"ttl,omitempty"`
 
+	// If specified, the StorageClass of the temporary PVC that is created from
+	// the VolumeSnapshot. Its provisioner must support creating volumes from
+	// VolumeSnapshots. If empty, the operator's configured backup StorageClass
+	// is used, or the cluster default StorageClass if none is configured.
+	// +optional
+	StorageClassName string `json:"storageClassName,omitempty"`
+
 	// NodeSelector is a selector which must be true for the backup Pod to fit
 	// on a node. This can be used e.g. to select which type of node, or which
 	// Availability Zone, performs a backup.

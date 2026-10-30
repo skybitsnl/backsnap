@@ -43,10 +43,14 @@ var (
 	maxRunningBackups     = flag.Int("max-running-backups", 1, "Maximum amount of backups to run simultaneously")
 	sleepBetweenBackups   = flag.Int("sleep-between-backups", 30, "Seconds to sleep between backing up of each PVC")
 
-	snapshotClassFlag = flag.String("snapshotclass", "", "name of the VolumeSnapshotClass to use")
-	storageClassFlag  = flag.String("storageclass", "", "name fo the StorageClass to use")
-	imagePullSecret   = flag.String("imagepullsecret", "", "imagePullSecret to pass to backup Pod (optional)")
-	image             = flag.String("image", "sjorsgielen/backsnap-restic:latest-main", "Restic back-up image")
+	snapshotClassFlag       = flag.String("snapshotclass", "", "name of the VolumeSnapshotClass to use")
+	storageClassFlag        = flag.String("storageclass", "", "name of the StorageClass to use for backup and restore PVCs, unless overridden by -backup-storageclass or -restore-storageclass")
+	backupStorageClassFlag  = flag.String("backup-storageclass", "", "name of the StorageClass to use for temporary backup PVCs (default is -storageclass)")
+	restoreStorageClassFlag = flag.String("restore-storageclass", "", "name of the StorageClass to use for restored PVCs (default is -storageclass)")
+
+	imagePullSecret = flag.String("imagepullsecret", "", "imagePullSecret to pass to backup Pod (optional)")
+	image           = flag.String("image", "sjorsgielen/backsnap-restic:latest-main", "Restic back-up image")
+
 	s3Host            = flag.String("s3-host", "", "S3 hostname (can be host, host:port or http://host:port/)")
 	s3Bucket          = flag.String("s3-bucket", "", "S3 bucket")
 	s3AccessKeyId     = flag.String("s3-access-key-id", "", "S3 access key ID")
@@ -141,15 +145,17 @@ func main() {
 	}
 
 	backupSettings := controller.BackupSettings{
-		SnapshotClass:     *snapshotClassFlag,
-		StorageClass:      *storageClassFlag,
-		ImagePullSecret:   *imagePullSecret,
-		Image:             *image,
-		S3Host:            *s3Host,
-		S3Bucket:          *s3Bucket,
-		S3AccessKeyId:     *s3AccessKeyId,
-		S3SecretAccessKey: *s3SecretAccessKey,
-		ResticPassword:    *resticPassword,
+		SnapshotClass:       *snapshotClassFlag,
+		StorageClass:        *storageClassFlag,
+		BackupStorageClass:  *backupStorageClassFlag,
+		RestoreStorageClass: *restoreStorageClassFlag,
+		ImagePullSecret:     *imagePullSecret,
+		Image:               *image,
+		S3Host:              *s3Host,
+		S3Bucket:            *s3Bucket,
+		S3AccessKeyId:       *s3AccessKeyId,
+		S3SecretAccessKey:   *s3SecretAccessKey,
+		ResticPassword:      *resticPassword,
 	}
 
 	if err = (&controller.PVCBackupReconciler{

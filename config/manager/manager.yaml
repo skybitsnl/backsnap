@@ -78,6 +78,15 @@ spec:
         # - -storageclass
         # - csi-block
 
+        # Optionally, separate storage classes can be set for the temporary PVCs
+        # created while making a back-up, and for the PVCs created while restoring
+        # one. These take precedence over -storageclass. The storage class for
+        # back-ups must support creating volumes from volume snapshots. Individual
+        # PVCBackup and PVCRestore objects can override these using
+        # spec.storageClassName.
+        # - -backup-storageclass=csi-block
+        # - -restore-storageclass=csi-block-replicated
+
         # The location and credentials of the S3 bucket where backups will be stored.
         # The S3 hostname can be host, host:port or http://host:port/. Any target supported
         # by Restic is supported, also e.g. RustFS.

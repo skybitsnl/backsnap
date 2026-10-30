@@ -45,6 +45,9 @@ app:
   manual: ""
   snapshotClass: ""
   storageClass: ""
+  # Override storageClass for backup or restore PVCs only
+  backupStorageClass: ""
+  restoreStorageClass: ""
   s3:
     host: ""
     bucket: ""

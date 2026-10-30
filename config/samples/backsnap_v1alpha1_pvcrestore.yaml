@@ -13,6 +13,10 @@ spec:
   targetPvc: "my-restored-data"
   targetPvcSize: "1Gi"
 
+  # If specified, the StorageClass of the restored PVC. Otherwise, the
+  # operator's configured restore StorageClass is used, or the cluster default.
+  #storageClassName: "csi-block-replicated"
+
   # NodeSelector is a selector which must be true for the restore Pod to fit
   # on a node. This can be used e.g. to select which type of node, or which
   # Availability Zone, performs a restore. This, in turn, may also determine

@@ -6,3 +6,9 @@ metadata:
 spec:
   pvc: my-data
   ttl: 1h
+
+  # If specified, the StorageClass of the temporary PVC created from the
+  # VolumeSnapshot. It must support creating volumes from VolumeSnapshots.
+  # Otherwise, the operator's configured backup StorageClass is used, or the
+  # cluster default.
+  #storageClassName: "csi-block"

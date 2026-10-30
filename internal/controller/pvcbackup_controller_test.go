@@ -38,6 +38,18 @@ var _ = Describe("PVCBackup and PVCRestore controller", func() {
 		storageClassName = "csi-hostpath-sc"
 	}
 
+	// Restored PVCs may use a different StorageClass than backup PVCs. The
+	// Minikube standard one ignores the VolumeSnapshot when provisioning a
+	// volume, so if backups accidentally used it, they would back up an empty
+	// volume. The tests check the backup PVC's StorageClass directly.
+	var restoreStorageClassName string
+	if sc, ok := os.LookupEnv("RESTORE_STORAGE_CLASS_NAME"); ok && len(sc) > 0 {
+		restoreStorageClassName = sc
+	} else {
+		// This is a Minikube assumption
+		restoreStorageClassName = "standard"
+	}
+
 	var snapshotClassName string
 	if vc, ok := os.LookupEnv("SNAPSHOT_CLASS_NAME"); ok && len(vc) > 0 {
 		snapshotClassName = vc
@@ -155,8 +167,9 @@ var _ = Describe("PVCBackup and PVCRestore controller", func() {
 		Expect(err).ToNot(HaveOccurred())
 
 		backupSettings := BackupSettings{
-			SnapshotClass: snapshotClassName,
-			StorageClass:  storageClassName,
+			SnapshotClass:       snapshotClassName,
+			StorageClass:        storageClassName,
+			RestoreStorageClass: restoreStorageClassName,
 			// default restic image
 			ImagePullSecret: "",
 			Image:           "sjorsgielen/backsnap-restic:latest-main",
@@ -275,6 +288,11 @@ var _ = Describe("PVCBackup and PVCRestore controller", func() {
 			}
 			Expect(k8sClient.Create(ctx, backup)).Should(Succeed())
 
+			// The backup PVC is deleted once the backup finishes, so check it
+			// while the backup is running.
+			By("the backup PVC, named after the PVCBackup, uses the backup StorageClass")
+			expectPVCStorageClass(ctx, namespace, "my-backup", storageClassName)
+
 			Eventually(func() bool {
 				Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(backup), backup)).Should(Succeed())
 
@@ -357,6 +375,9 @@ var _ = Describe("PVCBackup and PVCRestore controller", func() {
 			}, time.Minute, time.Second).Should(BeTrue())
 
 			Expect(*restore.Status.Result).To(BeEquivalentTo("Succeeded"))
+
+			By("the restored PVC uses the restore StorageClass")
+			expectPVCStorageClass(ctx, namespace, "my-data", restoreStorageClassName)
 
 			By("dumping the contents")
 			pod := &corev1.Pod{
@@ -546,7 +567,75 @@ var _ = Describe("PVCBackup and PVCRestore controller", func() {
 			}
 		})
 	})
+
+	When("a StorageClass is set on the object", func() {
+		// This StorageClass does not exist, so PVCs using it stay Pending. That is
+		// enough to check which StorageClass they were created with. The Pending
+		// PVCs are cleaned up along with the namespace.
+		nonexistentStorageClassName := "backsnap-test-nonexistent"
+
+		It("should create the backup PVC with that StorageClass", func() {
+			By("creating a PVC to back up")
+			createPVC(ctx, namespace, "my-data", storageClassName)
+
+			By("creating a PVCBackup that overrides the StorageClass")
+			backup := &v1alpha1.PVCBackup{
+				ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: "my-backup"},
+				Spec: v1alpha1.PVCBackupSpec{
+					PVCName:          "my-data",
+					StorageClassName: nonexistentStorageClassName,
+				},
+			}
+			Expect(k8sClient.Create(ctx, backup)).Should(Succeed())
+
+			By("the backup PVC, named after the PVCBackup, uses the overridden StorageClass")
+			expectPVCStorageClass(ctx, namespace, "my-backup", nonexistentStorageClassName)
+		})
+
+		It("should create the restored PVC with that StorageClass", func() {
+			By("creating a PVCRestore that overrides the StorageClass")
+			restore := &v1alpha1.PVCRestore{
+				ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: "my-restore"},
+				Spec: v1alpha1.PVCRestoreSpec{
+					SourcePVC:        "my-data",
+					TargetPVCSize:    resource.MustParse("1Gi"),
+					StorageClassName: nonexistentStorageClassName,
+				},
+			}
+			Expect(k8sClient.Create(ctx, restore)).Should(Succeed())
+
+			By("the restored PVC uses the overridden StorageClass")
+			expectPVCStorageClass(ctx, namespace, "my-data", nonexistentStorageClassName)
+		})
+	})
 })
+
+func createPVC(ctx context.Context, namespace, name, storageClassName string) {
+	GinkgoHelper()
+	pvc := &corev1.PersistentVolumeClaim{
+		ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: name},
+		Spec: corev1.PersistentVolumeClaimSpec{
+			StorageClassName: &storageClassName,
+			AccessModes:      []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
+			Resources: corev1.VolumeResourceRequirements{
+				Requests: map[corev1.ResourceName]resource.Quantity{
+					corev1.ResourceStorage: resource.MustParse("1Gi"),
+				},
+			},
+		},
+	}
+	Expect(k8sClient.Create(ctx, pvc)).Should(Succeed())
+}
+
+// expectPVCStorageClass waits until the PVC exists, then checks its StorageClass.
+func expectPVCStorageClass(ctx context.Context, namespace, name, storageClassName string) {
+	GinkgoHelper()
+	pvc := &corev1.PersistentVolumeClaim{}
+	Eventually(func() error {
+		return k8sClient.Get(ctx, client.ObjectKey{Namespace: namespace, Name: name}, pvc)
+	}, time.Minute, time.Second).Should(Succeed())
+	Expect(pvc.Spec.StorageClassName).To(HaveValue(Equal(storageClassName)))
+}
 
 func portFromAddr(addr string) string {
 	idx := strings.Index(addr, ":")

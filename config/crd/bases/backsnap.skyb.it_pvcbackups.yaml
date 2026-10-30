@@ -88,6 +88,13 @@ spec:
               pvc:
                 description: Name of the PVC to back up. Must be in the same namespace.
                 type: string
+              storageClassName:
+                description: |-
+                  If specified, the StorageClass of the temporary PVC that is created from
+                  the VolumeSnapshot. Its provisioner must support creating volumes from
+                  VolumeSnapshots. If empty, the operator's configured backup StorageClass
+                  is used, or the cluster default StorageClass if none is configured.
+                type: string
               tolerations:
                 description: If specified, the backup Pod's tolerations.
                 items:
