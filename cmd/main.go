@@ -49,7 +49,7 @@ var (
 	restoreStorageClassFlag = flag.String("restore-storageclass", "", "name of the StorageClass to use for restored PVCs (default is -storageclass)")
 
 	imagePullSecret = flag.String("imagepullsecret", "", "imagePullSecret to pass to backup Pod (optional)")
-	image           = flag.String("image", "sjorsgielen/backsnap-restic:latest-main", "Restic back-up image")
+	image           = flag.String("image", defaultResticImage(), "Restic back-up image")
 
 	s3Host            = flag.String("s3-host", "", "S3 hostname (can be host, host:port or http://host:port/)")
 	s3Bucket          = flag.String("s3-bucket", "", "S3 bucket")
@@ -57,6 +57,18 @@ var (
 	s3SecretAccessKey = flag.String("s3-secret-access-key", "", "S3 secret access key")
 	resticPassword    = flag.String("restic-password", "", "Restic password to encrypt storage by")
 )
+
+// Set by goreleaser to the version being released, e.g. "0.10.0".
+var version string
+
+// defaultResticImage returns the restic image released together with this
+// version of Backsnap, or the latest released image for development builds.
+func defaultResticImage() string {
+	if version == "" {
+		return "sjorsgielen/backsnap-restic:latest"
+	}
+	return "sjorsgielen/backsnap-restic:v" + version
+}
 
 var (
 	scheme = runtime.NewScheme()

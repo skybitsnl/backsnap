@@ -124,6 +124,13 @@ spec:
         - {{ .Values.app.restoreStorageClass }}
         {{- end }}
 
+        # The image used by backup and restore Jobs. By default, this is the
+        # sjorsgielen/backsnap-restic image released with this Backsnap version.
+        {{- if .Values.app.restic.image }}
+        - --image
+        - {{ .Values.app.restic.image }}
+        {{- end }}
+
         # The location and credentials of the S3 bucket where backups will be stored.
         # The S3 hostname can be host, host:port or http://host:port/. Any target supported
         # by Restic is supported, also e.g. RustFS.

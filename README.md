@@ -94,6 +94,9 @@ app:
   # Restic configuration
   restic:
     password: ""
+    # The image used by backup and restore Jobs. By default, this is the
+    # sjorsgielen/backsnap-restic image released with this Backsnap version.
+    #image: ""
 ```
 
 After this, you can observe your backups and their status using:
@@ -157,7 +160,8 @@ wget https://raw.githubusercontent.com/skybitsnl/backsnap/main/config/manager/ma
 Edit the manager.yaml and adjust as necessary.
 
 - The version by default is set to `latest`, you may want to choose a specific tag here
-  to prevent automatic updating.
+  to prevent automatic updating. The restic image used by backup and restore jobs
+  follows the operator version, so pinning the operator pins both.
 - See the args inside the default YAML for any configuration you may want to set.
 
 Then, deploy it:
@@ -324,6 +328,9 @@ This will use your local credentials to access the cluster and create resources.
 Of course, if you simply have a `backsnap` binary, just run it as
 `backsnap -s3-host ...`.
 
+Backup and restore jobs use the `sjorsgielen/backsnap-restic` image released
+together with the running Backsnap version, e.g. `v0.10.0`. Builds without a
+version, such as `go run`, use `sjorsgielen/backsnap-restic:latest` instead.
 If you've made changes to the Restic image that is used in backup jobs, you can
 use `-image` to use your image. Of course, your Kubelet must be able to access
 this image, so `imagePullSecret` can be used if it is hosted on a private
@@ -372,6 +379,12 @@ $ goreleaser release --snapshot --clean
 $ ./retag-images-for-test.sh --push my-private-registry/backsnap:test-new-feature
 $ kubectl set image -n backsnap deployment/backsnap-operator manager=my-private-registry/backsnap:test-new-feature
 ```
+
+Snapshot builds have no published restic image, so their default `-image`
+(`sjorsgielen/backsnap-restic:v<snapshot version>`) does not exist. Set
+`-image` in the deployment's args (or `app.restic.image` when using Helm) to
+an existing restic image, e.g. `sjorsgielen/backsnap-restic:latest`, or to
+the snapshot's restic image after pushing it to your registry.
 
 Note, on subsequent runs, that the last command does nothing if the image is
 already set to that value. If you just pushed a new image with the same name,

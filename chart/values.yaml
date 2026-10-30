@@ -55,3 +55,5 @@ app:
     secretKey: ""
   restic:
     password: ""
+    # Default is the restic image released with this Backsnap version
+    image: ""
