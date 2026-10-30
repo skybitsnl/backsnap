@@ -348,6 +348,16 @@ contexts, and can switch to the existing one you had using `kubectl config
 use-context NAME`. Then, you can switch back using `kubectl config use-context
 minikube` in order to run the tests again.
 
+Before running the tests, `make test` builds the restic image from this
+repository (`Dockerfile.restic` and `restic.sh`) and pushes it into minikube's
+registry addon, so that changes to it are tested as well. This requires
+minikube's default `docker` container runtime. To run the tests against an
+existing image instead, set `RESTIC_IMAGE`:
+
+```
+make test RESTIC_IMAGE=sjorsgielen/backsnap-restic:v0.9.0
+```
+
 ## Building it locally / running your changes on a cluster
 
 This project uses goreleaser. If you have local changes, you can use

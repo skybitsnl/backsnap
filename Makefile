@@ -72,7 +72,19 @@ test: manifests generate fmt vet envtest ## Run tests.
 		echo >&2 ; \
 		exit 1 ; \
 	}
+	@[ -n "$(RESTIC_IMAGE)" ] || $(MAKE) minikube-restic-image
+	RESTIC_IMAGE="$(or $(RESTIC_IMAGE),$(MINIKUBE_RESTIC_IMAGE))" \
 	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test ./... -coverprofile cover.out -ginkgo.vv -test.v
+
+# The tests use the restic image built from this repository, unless RESTIC_IMAGE
+# is set to an existing image, e.g. `make test RESTIC_IMAGE=sjorsgielen/backsnap-restic:v0.9.0`.
+MINIKUBE_RESTIC_IMAGE = localhost:5000/backsnap-restic:dev
+
+.PHONY: minikube-restic-image
+minikube-restic-image: ## Build the restic image into minikube's registry, for use by the tests.
+	minikube addons enable registry
+	minikube image build -t $(MINIKUBE_RESTIC_IMAGE) -f Dockerfile.restic .
+	minikube ssh -- docker push --quiet $(MINIKUBE_RESTIC_IMAGE)
 
 GOLANGCI_LINT = $(shell pwd)/bin/golangci-lint
 GOLANGCI_LINT_VERSION ?= v1.54.2

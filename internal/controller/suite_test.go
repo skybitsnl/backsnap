@@ -3,6 +3,7 @@ package controller
 import (
 	"fmt"
 	"log/slog"
+	"os"
 	"path/filepath"
 	"runtime"
 	"testing"
@@ -27,6 +28,10 @@ var cfg *rest.Config
 var k8sClient client.Client
 var testEnv *envtest.Environment
 
+// The restic image used by backup and restore Jobs. `make test` builds it from
+// this repository, unless RESTIC_IMAGE is set to an existing image.
+var resticImage string
+
 func TestControllers(t *testing.T) {
 	RegisterFailHandler(Fail)
 
@@ -36,6 +41,9 @@ func TestControllers(t *testing.T) {
 var _ = BeforeSuite(func() {
 	logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
 	slog.SetDefault(slog.New(slog.NewTextHandler(GinkgoWriter, &slog.HandlerOptions{})))
+
+	resticImage = os.Getenv("RESTIC_IMAGE")
+	Expect(resticImage).ToNot(BeEmpty(), "RESTIC_IMAGE is not set, run the tests using `make test`")
 
 	By("bootstrapping test environment")
 	testEnv = &envtest.Environment{

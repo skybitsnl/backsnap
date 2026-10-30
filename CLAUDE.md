@@ -7,7 +7,7 @@ everything from "Contributing" down).
 ## Way of working
 
 - Do not commit yourself. Stop and ask the user to commit. Suggest a commit
-  message.
+  message. Assume the user is proficient with git.
 - For new developments, begin with a design, and check it with the user before
   writing code, unless the change is small and the user does not ask for a
   design first.
@@ -54,9 +54,10 @@ everything from "Contributing" down).
 - `make test` runs Ginkgo e2e tests against a real cluster and refuses any
   kubectl context other than `minikube`. It deploys RustFS (as S3 backend) and runs real Jobs,
   so it is slow. Never point it at another cluster.
-- The tests pull a *published* restic image (see `Image:` in
-  `pvcbackup_controller_test.go`), so local changes to `restic.sh` are not
-  exercised until that image is rebuilt and pushed.
+- `make test` first builds the restic image (`Dockerfile.restic` + `restic.sh`)
+  into minikube's registry (`make minikube-restic-image`), so the tests cover
+  local changes to it. `RESTIC_IMAGE=<image>` skips the build and uses an
+  existing image instead; see README "Running the tests".
 - Logging uses `log/slog`.
 - Releases: pushing a git tag triggers e2e + goreleaser (binaries and
   multi-arch images for both the operator and restic image).

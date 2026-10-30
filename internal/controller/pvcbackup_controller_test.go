@@ -170,9 +170,8 @@ var _ = Describe("PVCBackup and PVCRestore controller", func() {
 			SnapshotClass:       snapshotClassName,
 			StorageClass:        storageClassName,
 			RestoreStorageClass: restoreStorageClassName,
-			// default restic image
-			ImagePullSecret: "",
-			Image:           "sjorsgielen/backsnap-restic:latest-main",
+			ImagePullSecret:     "",
+			Image:               resticImage,
 			// RustFS we just set up
 			S3Host:            "http://rustfs:9000",
 			S3Bucket:          mbucket,
