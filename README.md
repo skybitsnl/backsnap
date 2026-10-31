@@ -422,23 +422,27 @@ This project uses goreleaser. If you have local changes, you can use
 need Docker images, you can run `goreleaser release --snapshot --clean` which
 will create them locally. If you want to test them on a Kubernetes cluster, you
 should push them to a (private) registry writable by you and readable from your
-cluster. You can use the `retag-images-for-test.sh` script for this, e.g.:
+cluster. You can use the `retag-images-for-test.sh` script for this. It pushes
+both the operator image and the restic image, e.g.:
 
 ```
 $ goreleaser release --snapshot --clean
-$ ./retag-images-for-test.sh --push my-private-registry/backsnap:test-new-feature
-$ kubectl set image -n backsnap deployment/backsnap-operator manager=my-private-registry/backsnap:test-new-feature
+$ ./retag-images-for-test.sh my-private-registry test-new-feature --deploy my-test-cluster
 ```
 
-Snapshot builds have no published restic image, so their default `-image`
-(`sjorsgielen/backsnap-restic:v<snapshot version>`) does not exist. Set
-`-image` in the deployment's args (or `app.restic.image` when using Helm) to
-an existing restic image, e.g. `sjorsgielen/backsnap-restic:latest`, or to
-the snapshot's restic image after pushing it to your registry.
+With `--deploy`, the script also patches the operator's Deployment in the given
+kubectl context to use both images, and restarts it. The operator needs the
+restic image too, since snapshot builds default to a restic image
+(`sjorsgielen/backsnap-restic:v<snapshot version>`) that is never published.
+The patch sets the operator image and its imagePullPolicy to Always, and
+appends `-image` with the restic image to the operator's arguments, which
+overrides an earlier `-image`, since the last occurrence of a flag wins. Backup
+and restore Jobs always pull their image, so they use a newly pushed restic
+image right away. If your operator is not `backsnap/backsnap-operator`, set
+`NAMESPACE` and `DEPLOYMENT`.
 
-Note, on subsequent runs, that the last command does nothing if the image is
-already set to that value. If you just pushed a new image with the same name,
-ensure that the imagePullPolicy is set to Always and simply delete the Pod.
+The patch also works if you installed Backsnap with Helm. To undo it after
+testing, apply your manifests again, or run `helm upgrade` again.
 
 Also, the commands above do not update the CRDs, so you may need to update them
 manually:
