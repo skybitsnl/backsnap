@@ -87,12 +87,10 @@ minikube-restic-image: ## Build the restic image into minikube's registry, for u
 	minikube ssh -- docker push --quiet $(MINIKUBE_RESTIC_IMAGE)
 
 GOLANGCI_LINT = $(shell pwd)/bin/golangci-lint
-GOLANGCI_LINT_VERSION ?= v1.54.2
-golangci-lint:
-	@[ -f $(GOLANGCI_LINT) ] || { \
-	set -e ;\
-	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(shell dirname $(GOLANGCI_LINT)) $(GOLANGCI_LINT_VERSION) ;\
-	}
+GOLANGCI_LINT_VERSION ?= v2.15.0
+golangci-lint: $(LOCALBIN)
+	test -s $(GOLANGCI_LINT) && $(GOLANGCI_LINT) version --short | grep -qx $(GOLANGCI_LINT_VERSION:v%=%) || \
+	GOBIN=$(LOCALBIN) go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
 
 .PHONY: lint
 lint: golangci-lint ## Run golangci-lint linter & yamllint
