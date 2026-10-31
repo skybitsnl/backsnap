@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"log"
 	"log/slog"
 	"os"
@@ -58,6 +59,22 @@ var (
 	resticPassword    = flag.String("restic-password", "", "Restic password to encrypt storage by")
 )
 
+// Extra environment variables for restic containers, from repeated -restic-env flags
+var resticEnv = keyValueFlag{}
+
+type keyValueFlag map[string]string
+
+func (f keyValueFlag) String() string { return "" }
+
+func (f keyValueFlag) Set(s string) error {
+	key, value, ok := strings.Cut(s, "=")
+	if !ok {
+		return fmt.Errorf("expected KEY=VALUE, got %q", s)
+	}
+	f[key] = value
+	return nil
+}
+
 // Set by goreleaser to the version being released, e.g. "0.10.0".
 var version string
 
@@ -91,6 +108,7 @@ func requiredFlag(fn string) {
 }
 
 func main() {
+	flag.Var(resticEnv, "restic-env", "KEY=VALUE environment variable to set in backup and restore containers, can be repeated")
 	flag.Parse()
 
 	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{})))
@@ -168,6 +186,7 @@ func main() {
 		S3AccessKeyId:       *s3AccessKeyId,
 		S3SecretAccessKey:   *s3SecretAccessKey,
 		ResticPassword:      *resticPassword,
+		ResticEnv:           resticEnv,
 	}
 
 	if err = (&controller.PVCBackupReconciler{

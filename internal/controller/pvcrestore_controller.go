@@ -214,7 +214,7 @@ func (r *PVCRestoreReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 								"--sparse", "--verify",
 								"--target", "/data",
 							},
-							Env: []corev1.EnvVar{{
+							Env: r.BackupSettings.resticEnv([]corev1.EnvVar{{
 								Name:  "BACKUP_NAMESPACE",
 								Value: restore.Spec.SourceNamespace,
 							}, {
@@ -238,7 +238,7 @@ func (r *PVCRestoreReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 							}, {
 								Name:  "RESTIC_REPOSITORY",
 								Value: "$(RESTIC_REPOSITORY_BASE)/$(BACKUP_NAMESPACE)/$(BACKUP_VOLUME)",
-							}},
+							}}),
 							// We mount the volume at /data/data, and then restore to /data, because the
 							// topmost directory of the backup will be /data so will end up at /data/data
 							// and therefore in the root of the PVC

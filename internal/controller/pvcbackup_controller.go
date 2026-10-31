@@ -377,7 +377,7 @@ func (r *PVCBackupReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 							Name:            "default",
 							Image:           r.BackupSettings.Image,
 							ImagePullPolicy: "Always",
-							Env: []corev1.EnvVar{{
+							Env: r.BackupSettings.resticEnv([]corev1.EnvVar{{
 								Name:  "BACKUP_NAMESPACE",
 								Value: pvc.Namespace,
 							}, {
@@ -401,7 +401,7 @@ func (r *PVCBackupReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 							}, {
 								Name:  "RESTIC_REPOSITORY",
 								Value: "$(RESTIC_REPOSITORY_BASE)/$(BACKUP_NAMESPACE)/$(BACKUP_VOLUME)",
-							}},
+							}}),
 							VolumeMounts: []corev1.VolumeMount{{
 								Name:      "data",
 								ReadOnly:  true,

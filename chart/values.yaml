@@ -57,3 +57,6 @@ app:
     password: ""
     # Default is the restic image released with this Backsnap version
     image: ""
+    # Extra environment variables for backup and restore containers, e.g.
+    # GOGC: "20". See the README for useful variables.
+    env: {}

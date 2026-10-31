@@ -97,6 +97,10 @@ app:
     # The image used by backup and restore Jobs. By default, this is the
     # sjorsgielen/backsnap-restic image released with this Backsnap version.
     #image: ""
+    # Extra environment variables for backup and restore containers, see
+    # "Tuning backup and restore containers" below.
+    #env:
+    #  GOGC: "20"
 ```
 
 After this, you can observe your backups and their status using:
@@ -245,6 +249,28 @@ spec:
 
 For a concrete scenario of this, see
 [Migrating a PVC to another availability zone using Backsnap](docs/migrate_pvc_to_another_az.md).
+
+### Tuning backup and restore containers
+
+You can set extra environment variables in the containers of all backup and
+restore Jobs, using `app.restic.env` in the Helm chart or the `-restic-env
+KEY=VALUE` flag (which can be repeated). Variables that Backsnap sets itself,
+such as `RESTIC_REPOSITORY` and `RESTIC_PASSWORD`, cannot be overridden this
+way. Useful variables include:
+
+| Variable | Effect |
+|---|---|
+| `GOMAXPROCS` | Maximum number of CPUs restic uses at the same time, e.g. `1`. |
+| `GOGC` | How eagerly restic frees memory. Lower values, e.g. `20`, use less memory at the cost of more CPU. |
+| `GOMEMLIMIT` | Soft memory limit for restic, e.g. `1000MiB`. Useful to stay below a container memory limit. |
+| `RESTIC_PROGRESS_FPS` | How often restic logs its progress per second, e.g. `0.0166666` for once per minute. |
+| `RESTIC_READ_CONCURRENCY` | Number of files read at the same time during a backup. |
+| `RESTIC_PACK_SIZE` | Target size of pack files in MiB. |
+| `RESTIC_COMPRESSION` | Compression mode: `auto`, `off` or `max`. |
+
+See the [restic documentation](https://restic.readthedocs.io/en/stable/075_scripting.html#environment-variables)
+for all variables restic understands. In Helm values, quote numbers, e.g.
+`GOMAXPROCS: "1"`, so that they are passed exactly as written.
 
 ### Troubleshooting
 

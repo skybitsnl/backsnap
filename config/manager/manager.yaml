@@ -91,6 +91,10 @@ spec:
         # sjorsgielen/backsnap-restic image released with this Backsnap version.
         # - -image=my-registry/backsnap-restic:v0.10.0
 
+        # Extra environment variables for backup and restore containers. Can be
+        # repeated. See the README for useful variables.
+        # - -restic-env=GOGC=20
+
         # The location and credentials of the S3 bucket where backups will be stored.
         # The S3 hostname can be host, host:port or http://host:port/. Any target supported
         # by Restic is supported, also e.g. RustFS.

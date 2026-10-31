@@ -1,6 +1,12 @@
 package controller
 
-import "time"
+import (
+	"slices"
+	"time"
+
+	"github.com/samber/lo"
+	corev1 "k8s.io/api/core/v1"
+)
 
 var (
 	BackupScheduleAnnotation     = "backsnap.skyb.it/schedule"
@@ -30,6 +36,23 @@ type BackupSettings struct {
 	S3AccessKeyId     string
 	S3SecretAccessKey string
 	ResticPassword    string
+	ResticEnv         map[string]string
+}
+
+// resticEnv returns the environment for a backup or restore container: the
+// variables managed by the operator, followed by the configured ResticEnv.
+// Managed variables cannot be overridden by ResticEnv.
+func (s BackupSettings) resticEnv(managed []corev1.EnvVar) []corev1.EnvVar {
+	names := lo.Keys(s.ResticEnv)
+	slices.Sort(names)
+
+	env := managed
+	for _, name := range names {
+		if !lo.ContainsBy(managed, func(e corev1.EnvVar) bool { return e.Name == name }) {
+			env = append(env, corev1.EnvVar{Name: name, Value: s.ResticEnv[name]})
+		}
+	}
+	return env
 }
 
 // backupStorageClassName returns the StorageClass for a temporary backup PVC,

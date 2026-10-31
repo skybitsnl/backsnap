@@ -131,6 +131,13 @@ spec:
         - {{ .Values.app.restic.image }}
         {{- end }}
 
+        # Extra environment variables for backup and restore containers. See
+        # the README for useful variables.
+        {{- range $name, $value := .Values.app.restic.env }}
+        - --restic-env
+        - {{ printf "%s=%v" $name $value | quote }}
+        {{- end }}
+
         # The location and credentials of the S3 bucket where backups will be stored.
         # The S3 hostname can be host, host:port or http://host:port/. Any target supported
         # by Restic is supported, also e.g. RustFS.
