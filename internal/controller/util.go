@@ -47,6 +47,9 @@ var defaultResticEnv = map[string]string{
 	// Which part of the data the check after a backup reads (restic check
 	// --read-data-subset)
 	"BACKSNAP_CHECK_SUBSET": "10%",
+	// Log the progress of restic once per minute; without this, restic shows no
+	// progress when its output is not a terminal
+	"RESTIC_PROGRESS_FPS": "0.0166666",
 }
 
 // resticEnv returns the environment for a backup or restore container: the

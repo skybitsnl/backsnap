@@ -265,7 +265,7 @@ way. Useful variables include:
 | `GOMAXPROCS` | Maximum number of CPUs restic uses at the same time, e.g. `1`. |
 | `GOGC` | How eagerly restic frees memory. Lower values, e.g. `20`, use less memory at the cost of more CPU. |
 | `GOMEMLIMIT` | Soft memory limit for restic, e.g. `1000MiB`. Useful to stay below a container memory limit. |
-| `RESTIC_PROGRESS_FPS` | How often restic logs its progress per second, e.g. `0.0166666` for once per minute. |
+| `RESTIC_PROGRESS_FPS` | How often restic logs its progress per second. Default `0.0166666`, once per minute. Set it to `0` to log no progress. |
 | `RESTIC_READ_CONCURRENCY` | Number of files read at the same time during a backup. |
 | `RESTIC_PACK_SIZE` | Target size of pack files in MiB. |
 | `RESTIC_COMPRESSION` | Compression mode: `auto`, `off` or `max`. |
