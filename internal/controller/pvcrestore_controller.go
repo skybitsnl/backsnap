@@ -243,6 +243,7 @@ func (r *PVCRestoreReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 							// We mount the volume at /data/data, and then restore to /data, because the
 							// topmost directory of the backup will be /data so will end up at /data/data
 							// and therefore in the root of the PVC
+							Resources: r.BackupSettings.ResticResources,
 							VolumeMounts: []corev1.VolumeMount{{
 								Name:      "data",
 								MountPath: "/data/data",

@@ -18,11 +18,13 @@ import (
 	"github.com/samber/lo"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
+	"sigs.k8s.io/yaml"
 
 	backsnapv1alpha1 "github.com/skybitsnl/backsnap/api/v1alpha1"
 	"github.com/skybitsnl/backsnap/internal/controller"
@@ -75,6 +77,27 @@ func (f keyValueFlag) Set(s string) error {
 	return nil
 }
 
+// Resources of restic containers, from the -restic-resources flag
+var resticResources = resourcesFlag{
+	Requests: corev1.ResourceList{
+		corev1.ResourceMemory: resource.MustParse("128Mi"),
+		corev1.ResourceCPU:    resource.MustParse("20m"),
+	},
+}
+
+type resourcesFlag corev1.ResourceRequirements
+
+func (f *resourcesFlag) String() string { return "" }
+
+func (f *resourcesFlag) Set(s string) error {
+	var r corev1.ResourceRequirements
+	if err := yaml.UnmarshalStrict([]byte(s), &r); err != nil {
+		return err
+	}
+	*f = resourcesFlag(r)
+	return nil
+}
+
 // Set by goreleaser to the version being released, e.g. "0.10.0".
 var version string
 
@@ -109,6 +132,7 @@ func requiredFlag(fn string) {
 
 func main() {
 	flag.Var(resticEnv, "restic-env", "KEY=VALUE environment variable to set in backup and restore containers, can be repeated")
+	flag.Var(&resticResources, "restic-resources", `resources of backup and restore containers as JSON, e.g. {"limits":{"memory":"2Gi"}} (default is a request of 128Mi memory and 20m CPU)`)
 	flag.Parse()
 
 	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{})))
@@ -187,6 +211,7 @@ func main() {
 		S3SecretAccessKey:   *s3SecretAccessKey,
 		ResticPassword:      *resticPassword,
 		ResticEnv:           resticEnv,
+		ResticResources:     corev1.ResourceRequirements(resticResources),
 	}
 
 	if err = (&controller.PVCBackupReconciler{

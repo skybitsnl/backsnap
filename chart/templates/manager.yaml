@@ -138,6 +138,12 @@ spec:
         - {{ printf "%s=%v" $name $value | quote }}
         {{- end }}
 
+        # Resources of backup and restore containers. See the README.
+        {{- with .Values.app.restic.resources }}
+        - --restic-resources
+        - {{ toJson . | quote }}
+        {{- end }}
+
         # The location and credentials of the S3 bucket where backups will be stored.
         # The S3 hostname can be host, host:port or http://host:port/. Any target supported
         # by Restic is supported, also e.g. RustFS.

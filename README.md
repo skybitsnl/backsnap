@@ -101,6 +101,11 @@ app:
     # "Tuning backup and restore containers" below.
     #env:
     #  GOGC: "20"
+    # Resources of backup and restore containers, see "Resources of backup and
+    # restore containers" below.
+    #resources:
+    #  requests:
+    #    memory: 512Mi
 ```
 
 After this, you can observe your backups and their status using:
@@ -273,6 +278,23 @@ way. Useful variables include:
 See the [restic documentation](https://restic.readthedocs.io/en/stable/075_scripting.html#environment-variables)
 for all variables restic understands. In Helm values, quote numbers, e.g.
 `GOMAXPROCS: "1"`, so that they are passed exactly as written.
+
+### Resources of backup and restore containers
+
+By default, the containers of backup and restore Jobs request 128Mi of memory
+and 20m of CPU, without limits. You can set their resources using
+`app.restic.resources` in the Helm chart, or the `-restic-resources` flag with
+the resources as JSON, e.g. `{"requests":{"memory":"512Mi"},"limits":{"memory":"2Gi"}}`.
+This replaces the default requests.
+
+restic keeps the index of the repository in memory, so its memory use grows
+with the size of the repository and the number of files in it. `restic prune`,
+which runs after each backup, uses the most. When a node runs low on memory,
+Kubernetes first evicts Pods that use more memory than they requested. For
+large repositories, set a memory request close to what restic uses, so that
+backups are not evicted. If you set a memory limit, leave enough room for
+`restic prune`, or restic is killed when it exceeds the limit. `GOGC` and
+`GOMEMLIMIT` (see above) can reduce restic's memory use.
 
 ### Troubleshooting
 

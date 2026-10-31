@@ -402,6 +402,7 @@ func (r *PVCBackupReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 								Name:  "RESTIC_REPOSITORY",
 								Value: "$(RESTIC_REPOSITORY_BASE)/$(BACKUP_NAMESPACE)/$(BACKUP_VOLUME)",
 							}}),
+							Resources: r.BackupSettings.ResticResources,
 							VolumeMounts: []corev1.VolumeMount{{
 								Name:      "data",
 								ReadOnly:  true,

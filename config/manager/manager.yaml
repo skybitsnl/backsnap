@@ -95,6 +95,10 @@ spec:
         # repeated. See the README for useful variables.
         # - -restic-env=GOGC=20
 
+        # Resources of backup and restore containers, as JSON. Default is a
+        # request of 128Mi memory and 20m CPU, without limits. See the README.
+        # - '-restic-resources={"requests":{"memory":"512Mi"},"limits":{"memory":"2Gi"}}'
+
         # The location and credentials of the S3 bucket where backups will be stored.
         # The S3 hostname can be host, host:port or http://host:port/. Any target supported
         # by Restic is supported, also e.g. RustFS.

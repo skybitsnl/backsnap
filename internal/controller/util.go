@@ -37,6 +37,8 @@ type BackupSettings struct {
 	S3SecretAccessKey string
 	ResticPassword    string
 	ResticEnv         map[string]string
+	// Resources of backup and restore containers
+	ResticResources corev1.ResourceRequirements
 }
 
 // defaultResticEnv contains defaults for variables in backup and restore

@@ -60,3 +60,10 @@ app:
     # Extra environment variables for backup and restore containers, e.g.
     # GOGC: "20". See the README for useful variables.
     env: {}
+    # Resources of backup and restore containers. Default is a request of 128Mi
+    # memory and 20m CPU, without limits. See the README.
+    resources: {}
+    #  requests:
+    #    memory: 512Mi
+    #  limits:
+    #    memory: 2Gi
