@@ -44,6 +44,9 @@ type BackupSettings struct {
 var defaultResticEnv = map[string]string{
 	// How long restic waits for a lock on the repository (restic --retry-lock)
 	"BACKSNAP_RETRY_LOCK": "30m",
+	// Which part of the data the check after a backup reads (restic check
+	// --read-data-subset)
+	"BACKSNAP_CHECK_SUBSET": "10%",
 }
 
 // resticEnv returns the environment for a backup or restore container: the

@@ -261,6 +261,7 @@ way. Useful variables include:
 | Variable | Effect |
 |---|---|
 | `BACKSNAP_RETRY_LOCK` | How long restic waits for a locked repository, e.g. while another backup or restore of the same PVC runs. Default `30m`. |
+| `BACKSNAP_CHECK_SUBSET` | Which part of the repository's data the check after each backup reads and verifies, e.g. `5%`, `1/10` or `500M`. Default `10%`. |
 | `GOMAXPROCS` | Maximum number of CPUs restic uses at the same time, e.g. `1`. |
 | `GOGC` | How eagerly restic frees memory. Lower values, e.g. `20`, use less memory at the cost of more CPU. |
 | `GOMEMLIMIT` | Soft memory limit for restic, e.g. `1000MiB`. Useful to stay below a container memory limit. |

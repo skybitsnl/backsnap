@@ -57,6 +57,6 @@ restic snapshots
 echo ""
 
 # restic docs recommend another check after pruning
-restic --verbose check --read-data-subset=10%
+restic --verbose check --read-data-subset="${BACKSNAP_CHECK_SUBSET}"
 
 exit 0
