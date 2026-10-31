@@ -26,8 +26,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/kubernetes/scheme"
-	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	cruntimeconfig "sigs.k8s.io/controller-runtime/pkg/client/config"
 )
@@ -192,9 +190,7 @@ var _ = Describe("PVCBackup and PVCRestore controller", func() {
 	// Specs can adjust backupSettings in their own BeforeEach, which runs
 	// before the operator is started here.
 	JustBeforeEach(func() {
-		k8sManager, err := ctrl.NewManager(cfg, ctrl.Options{
-			Scheme: scheme.Scheme,
-		})
+		k8sManager, err := newManager()
 		Expect(err).ToNot(HaveOccurred())
 
 		err = (&PVCBackupReconciler{

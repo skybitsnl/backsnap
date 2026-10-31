@@ -6,7 +6,7 @@ import (
 	"log/slog"
 	"time"
 
-	volumesnapshotv1 "github.com/kubernetes-csi/external-snapshotter/client/v6/apis/volumesnapshot/v1"
+	volumesnapshotv1 "github.com/kubernetes-csi/external-snapshotter/client/v8/apis/volumesnapshot/v1"
 	"github.com/samber/lo"
 	v1alpha1 "github.com/skybitsnl/backsnap/api/v1alpha1"
 	batchv1 "k8s.io/api/batch/v1"

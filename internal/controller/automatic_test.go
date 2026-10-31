@@ -12,8 +12,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes/scheme"
-	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -35,9 +33,7 @@ var _ = Describe("Automatic controller", func() {
 		}})
 		Expect(err).ToNot(HaveOccurred())
 
-		k8sManager, err := ctrl.NewManager(cfg, ctrl.Options{
-			Scheme: scheme.Scheme,
-		})
+		k8sManager, err := newManager()
 		Expect(err).ToNot(HaveOccurred())
 
 		err = (&AutomaticPVCBackupCreator{
