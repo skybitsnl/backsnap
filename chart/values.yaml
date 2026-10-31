@@ -55,6 +55,8 @@ app:
     secretKey: ""
   restic:
     password: ""
+    # While rotating the password, the previous password. See the README.
+    oldPassword: ""
     # Default is the restic image released with this Backsnap version
     image: ""
     # Extra environment variables for backup and restore containers, e.g.

@@ -116,6 +116,12 @@ spec:
         - --restic-password
         - ChangeMe
 
+        # While rotating the restic password, set the previous password here.
+        # Backups move repositories that still use it to the new password. See
+        # the README.
+        # - --restic-old-password
+        # - OldPassword
+
         # There are other supported flags, too. See the manager --help (or
         # main.go) for more information.
 

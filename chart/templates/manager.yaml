@@ -148,18 +148,23 @@ spec:
         # The S3 hostname can be host, host:port or http://host:port/. Any target supported
         # by Restic is supported, also e.g. RustFS.
         - --s3-host
-        - {{ $s3Host }}
+        - {{ $s3Host | quote }}
         - --s3-bucket
-        - {{ $s3Bucket }}
+        - {{ $s3Bucket | quote }}
         - --s3-access-key-id
-        - {{ $s3AccessKey }}
+        - {{ $s3AccessKey | quote }}
         - --s3-secret-access-key
-        - {{ $s3SecretKey }}
+        - {{ $s3SecretKey | quote }}
 
         # The encryption key by which Restic will client-side encrypt your
         # backup. Do not lose this!
         - --restic-password
-        - {{ $resticPassword }}
+        - {{ $resticPassword | quote }}
+        {{- with .Values.app.restic.oldPassword }}
+        # While rotating the password, the previous password. See the README.
+        - --restic-old-password
+        - {{ . | quote }}
+        {{- end }}
 
         # There are other supported flags, too. See the manager --help (or
         # main.go) for more information.

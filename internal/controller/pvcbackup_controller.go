@@ -390,6 +390,9 @@ func (r *PVCBackupReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 								Name:  "RESTIC_PASSWORD",
 								Value: r.BackupSettings.ResticPassword,
 							}, {
+								Name:  "BACKSNAP_OLD_RESTIC_PASSWORD",
+								Value: r.BackupSettings.ResticOldPassword,
+							}, {
 								Name:  "AWS_ACCESS_KEY_ID",
 								Value: r.BackupSettings.S3AccessKeyId,
 							}, {

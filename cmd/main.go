@@ -59,6 +59,7 @@ var (
 	s3AccessKeyId     = flag.String("s3-access-key-id", "", "S3 access key ID")
 	s3SecretAccessKey = flag.String("s3-secret-access-key", "", "S3 secret access key")
 	resticPassword    = flag.String("restic-password", "", "Restic password to encrypt storage by")
+	resticOldPassword = flag.String("restic-old-password", "", "Previous restic password, while rotating it: backups move repositories that still use it to -restic-password")
 )
 
 // Extra environment variables for restic containers, from repeated -restic-env flags
@@ -210,6 +211,7 @@ func main() {
 		S3AccessKeyId:       *s3AccessKeyId,
 		S3SecretAccessKey:   *s3SecretAccessKey,
 		ResticPassword:      *resticPassword,
+		ResticOldPassword:   *resticOldPassword,
 		ResticEnv:           resticEnv,
 		ResticResources:     corev1.ResourceRequirements(resticResources),
 	}

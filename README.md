@@ -296,6 +296,37 @@ backups are not evicted. If you set a memory limit, leave enough room for
 `restic prune`, or restic is killed when it exceeds the limit. `GOGC` and
 `GOMEMLIMIT` (see above) can reduce restic's memory use.
 
+### Rotating the restic password
+
+All restic repositories use the password set with `app.restic.password` in the
+Helm chart, or the `-restic-password` flag. You can change it without
+re-encrypting any data:
+
+1. Set the new password, and set the current password as the old password,
+   using `app.restic.oldPassword` or `-restic-old-password`.
+2. From now on, each backup adds the new password to its repository, and
+   removes the old password from it. The log of the backup Job then shows
+   `Moved this repository to the new password`.
+3. Once every PVC has been backed up, remove the old password from the
+   configuration.
+
+Restores only use the new password. Keep the old password safe: repositories
+that were not backed up during the rotation, such as those of deleted PVCs or
+PVCs without a schedule, still use it. To restore such a repository, first add
+the new password to it using restic, which asks for the new password, and then
+create a PVCRestore as usual:
+
+```
+docker run --rm -it \
+  -e AWS_ACCESS_KEY_ID=... -e AWS_SECRET_ACCESS_KEY=... \
+  -e RESTIC_REPOSITORY=s3:<s3 host>/<bucket>/<namespace>/<pvc> \
+  -e RESTIC_PASSWORD='<old password>' \
+  restic/restic key add
+```
+
+Do not swap the two passwords to restore such a repository: backups would then
+move all repositories back to the old password.
+
 ### Troubleshooting
 
 If your PVCBackups or PVCRestores are failing, or not even starting, use the

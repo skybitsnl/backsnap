@@ -68,6 +68,7 @@ var _ = Describe("PVCBackup and PVCRestore controller", func() {
 	var namespace string
 
 	var mbucket string
+	var backupSettings BackupSettings
 	BeforeEach(func() {
 		ctx, cancel = context.WithCancel(context.Background())
 
@@ -173,12 +174,7 @@ var _ = Describe("PVCBackup and PVCRestore controller", func() {
 		err = mc.MakeBucket(ctx, mbucket, mclient.MakeBucketOptions{})
 		Expect(err).ToNot(HaveOccurred())
 
-		k8sManager, err := ctrl.NewManager(cfg, ctrl.Options{
-			Scheme: scheme.Scheme,
-		})
-		Expect(err).ToNot(HaveOccurred())
-
-		backupSettings := BackupSettings{
+		backupSettings = BackupSettings{
 			SnapshotClass:       snapshotClassName,
 			StorageClass:        storageClassName,
 			RestoreStorageClass: restoreStorageClassName,
@@ -192,6 +188,14 @@ var _ = Describe("PVCBackup and PVCRestore controller", func() {
 			// any restic password
 			ResticPassword: "resticpass",
 		}
+	})
+	// Specs can adjust backupSettings in their own BeforeEach, which runs
+	// before the operator is started here.
+	JustBeforeEach(func() {
+		k8sManager, err := ctrl.NewManager(cfg, ctrl.Options{
+			Scheme: scheme.Scheme,
+		})
+		Expect(err).ToNot(HaveOccurred())
 
 		err = (&PVCBackupReconciler{
 			Client:              k8sManager.GetClient(),
@@ -704,6 +708,29 @@ var _ = Describe("PVCBackup and PVCRestore controller", func() {
 
 			By("the stale lock has been removed")
 			Expect(listObjects(ctx, mc, mbucket, namespace+"/my-data/locks/")).To(BeEmpty())
+		})
+	})
+
+	When("the restic password is being rotated", func() {
+		BeforeEach(func() {
+			backupSettings.ResticOldPassword = "oldpass"
+		})
+
+		It("should move the repository to the new password", func() {
+			By("uploading a repository that uses the old password")
+			uploadDir(ctx, mc, mbucket, "testdata/old-password-repo", namespace+"/my-data")
+			oldKeys := listObjects(ctx, mc, mbucket, namespace+"/my-data/keys/")
+			Expect(oldKeys).To(HaveLen(1))
+
+			By("backing up a PVC into it, using the new password")
+			createPVC(ctx, namespace, "my-data", storageClassName)
+			fillPVC(ctx, namespace, "my-data", "echo 'Hello World!' >/data/foo.txt")
+			expectBackupSucceeds(ctx, createBackup(ctx, namespace, "my-backup", "my-data"))
+
+			By("the key of the old password has been replaced by one of the new password")
+			newKeys := listObjects(ctx, mc, mbucket, namespace+"/my-data/keys/")
+			Expect(newKeys).To(HaveLen(1))
+			Expect(newKeys).ToNot(Equal(oldKeys))
 		})
 	})
 })

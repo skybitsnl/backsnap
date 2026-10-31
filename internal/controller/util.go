@@ -36,6 +36,9 @@ type BackupSettings struct {
 	S3AccessKeyId     string
 	S3SecretAccessKey string
 	ResticPassword    string
+	// While rotating the restic password, the previous password. Backups move
+	// repositories that still use it to ResticPassword.
+	ResticOldPassword string
 	ResticEnv         map[string]string
 	// Resources of backup and restore containers
 	ResticResources corev1.ResourceRequirements
