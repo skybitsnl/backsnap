@@ -26,6 +26,14 @@ everything from "Contributing" down).
   not writing a test for it, you may write a scratch test to validate it
   succeeds as expected, then remove it so that it is not accidentally committed
   into the repository.
+- Before a PR or release, test the changes on a real cluster using a snapshot
+  build, as described in README "Building it locally / running your changes on
+  a cluster". Only use a cluster, kubectl context and registry that the user
+  has named for this, and ask before running `retag-images-for-test.sh` with
+  `--deploy <context>`, which pushes the images and patches the operator.
+  Include evidence of this test in the PR description, such as the resulting
+  `PVCBackup`/`PVCRestore` statuses and relevant parts of the Job logs. If the
+  user ran the test, ask them to add the evidence.
 
 ## Layout
 
