@@ -4,6 +4,12 @@
 
 replicaCount: 1
 
+crds:
+  # Install and upgrade the PVCBackup and PVCRestore CRDs with this release.
+  # When installing Backsnap more than once in a cluster, set this to false in
+  # all releases but one. The CRDs are kept when the release is uninstalled.
+  install: true
+
 image:
   repository: sjorsgielen/backsnap
   pullPolicy: IfNotPresent

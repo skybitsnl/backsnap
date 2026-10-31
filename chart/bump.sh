@@ -25,11 +25,22 @@ cp ../config/rbac/role* templates/rbac
 cp ../config/rbac/service_account.yaml templates
 cp ../README.md .
 
-# Replace the namespaces and managed-by
+# Replace the namespaces and managed-by, and give cluster-wide RBAC objects the
+# release's name, so that Backsnap can be installed more than once
 find templates -type f -exec gsed -i \
 	-e 's/namespace: backsnap/namespace: {{ .Release.Namespace }}/' \
 	-e 's/managed-by: kustomize/managed-by: Helm/' \
+	-e 's/name: backsnap-manager$/name: {{ include "backsnap.fullname" . }}-manager/' \
+	-e 's/name: manager-rolebinding$/name: {{ include "backsnap.fullname" . }}-manager-rolebinding/' \
 	\
+	{} \;
+
+# Allow skipping the CRDs, and keep them on uninstall, since deleting them
+# would delete all PVCBackups and PVCRestores
+find templates/crd -type f -exec gsed -i \
+	-e '1i {{- if .Values.crds.install }}' \
+	-e '/^  annotations:$/a\    helm.sh/resource-policy: keep' \
+	-e '$a {{- end }}' \
 	{} \;
 
 # Figure out the versioning

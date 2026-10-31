@@ -116,6 +116,12 @@ kubectl get pvcbackup -A
 
 See below on how to create your own PVCBackups, and restoring with PVCRestores.
 
+`helm uninstall` keeps the PVCBackup and PVCRestore CRDs, so that the
+PVCBackups and PVCRestores in the cluster are kept as well. If you install
+Backsnap more than once in a cluster, e.g. to back up different namespaces to
+different S3 buckets, give each release its own namespace and disjoint
+`app.namespaces`, and set `crds.install: false` in all releases but one.
+
 ### Manual installation with kubectl
 
 First, import the Backsnap CRDs:
