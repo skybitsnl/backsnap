@@ -24,6 +24,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -107,6 +108,13 @@ var _ = Describe("PVCBackup and PVCRestore controller", func() {
 						ReadOnly:  false,
 						MountPath: "/data",
 					}},
+					// The port-forward below fails if RustFS is not listening yet
+					ReadinessProbe: &corev1.Probe{
+						ProbeHandler: corev1.ProbeHandler{
+							TCPSocket: &corev1.TCPSocketAction{Port: intstr.FromInt32(9000)},
+						},
+						PeriodSeconds: 1,
+					},
 				}},
 			},
 		}
@@ -125,7 +133,9 @@ var _ = Describe("PVCBackup and PVCRestore controller", func() {
 		Expect(k8sClient.Create(ctx, mservice)).To(BeNil())
 		Eventually(func() bool {
 			Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(rustfs), rustfs)).To(BeNil())
-			return rustfs.Status.Phase == corev1.PodRunning
+			return lo.ContainsBy(rustfs.Status.Conditions, func(c corev1.PodCondition) bool {
+				return c.Type == corev1.PodReady && c.Status == corev1.ConditionTrue
+			})
 		}, time.Minute, time.Second).Should(BeTrue())
 
 		By("connecting to RustFS in the namespace")
