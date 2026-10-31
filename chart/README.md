@@ -47,7 +47,7 @@ namespaces do have an overriding schedule set).
 
 ```
 helm repo add backsnap https://skybitsnl.github.io/backsnap
-helm install --create-namespace --namespace backsnap backsnap -f values.yaml
+helm install --create-namespace --namespace backsnap backsnap backsnap/backsnap -f values.yaml
 ```
 
 An example `values.yaml` follows. For more configuration options, see the
@@ -77,6 +77,13 @@ app:
   # another one
   storageClass: ""
 
+  # Optionally, separate storage classes for the temporary PVCs created while
+  # making a backup, and for the PVCs created while restoring one. These take
+  # precedence over storageClass. The backup storage class must support
+  # creating volumes from volume snapshots.
+  #backupStorageClass: ""
+  #restoreStorageClass: ""
+
   # S3 backup destination configuration
   s3:
     host: ""
@@ -87,6 +94,18 @@ app:
   # Restic configuration
   restic:
     password: ""
+    # The image used by backup and restore Jobs. By default, this is the
+    # sjorsgielen/backsnap-restic image released with this Backsnap version.
+    #image: ""
+    # Extra environment variables for backup and restore containers, see
+    # "Tuning backup and restore containers" below.
+    #env:
+    #  GOGC: "20"
+    # Resources of backup and restore containers, see "Resources of backup and
+    # restore containers" below.
+    #resources:
+    #  requests:
+    #    memory: 512Mi
 ```
 
 After this, you can observe your backups and their status using:
@@ -96,6 +115,12 @@ kubectl get pvcbackup -A
 ```
 
 See below on how to create your own PVCBackups, and restoring with PVCRestores.
+
+`helm uninstall` keeps the PVCBackup and PVCRestore CRDs, so that the
+PVCBackups and PVCRestores in the cluster are kept as well. If you install
+Backsnap more than once in a cluster, e.g. to back up different namespaces to
+different S3 buckets, give each release its own namespace and disjoint
+`app.namespaces`, and set `crds.install: false` in all releases but one.
 
 ### Manual installation with kubectl
 
@@ -150,7 +175,8 @@ wget https://raw.githubusercontent.com/skybitsnl/backsnap/main/config/manager/ma
 Edit the manager.yaml and adjust as necessary.
 
 - The version by default is set to `latest`, you may want to choose a specific tag here
-  to prevent automatic updating.
+  to prevent automatic updating. The restic image used by backup and restore jobs
+  follows the operator version, so pinning the operator pins both.
 - See the args inside the default YAML for any configuration you may want to set.
 
 Then, deploy it:
@@ -227,10 +253,88 @@ spec:
   # you can override this
   #targetPvc: your-data-copy
   targetPvcSize: "10Gi"
+  # By default, the new PVC uses the operator's configured restore storage
+  # class, but you can override this
+  #storageClassName: fast-ssd
 ```
 
-For a concrete scenario of this, see
-[Migrating a PVC to another availability zone using Backsnap](docs/migrate_pvc_to_another_az.md).
+For concrete scenarios of this, see:
+
+- [Migrating a PVC to another availability zone using Backsnap](docs/migrate_pvc_to_another_az.md)
+- [Migrating a cluster to another location using Backsnap](docs/migrate_cluster_to_another_location.md)
+- [Moving backups to another S3 provider](docs/migrate_s3_provider.md)
+
+### Tuning backup and restore containers
+
+You can set extra environment variables in the containers of all backup and
+restore Jobs, using `app.restic.env` in the Helm chart or the `-restic-env
+KEY=VALUE` flag (which can be repeated). Variables that Backsnap sets itself,
+such as `RESTIC_REPOSITORY` and `RESTIC_PASSWORD`, cannot be overridden this
+way. Useful variables include:
+
+| Variable | Effect |
+|---|---|
+| `BACKSNAP_RETRY_LOCK` | How long restic waits for a locked repository, e.g. while another backup or restore of the same PVC runs. Default `30m`. |
+| `BACKSNAP_CHECK_SUBSET` | Which part of the repository's data the check after each backup reads and verifies, e.g. `5%`, `1/10` or `500M`. Default `10%`. |
+| `GOMAXPROCS` | Maximum number of CPUs restic uses at the same time, e.g. `1`. |
+| `GOGC` | How eagerly restic frees memory. Lower values, e.g. `20`, use less memory at the cost of more CPU. |
+| `GOMEMLIMIT` | Soft memory limit for restic, e.g. `1000MiB`. Useful to stay below a container memory limit. |
+| `RESTIC_PROGRESS_FPS` | How often restic logs its progress per second. Default `0.0166666`, once per minute. Set it to `0` to log no progress. |
+| `RESTIC_READ_CONCURRENCY` | Number of files read at the same time during a backup. |
+| `RESTIC_PACK_SIZE` | Target size of pack files in MiB. |
+| `RESTIC_COMPRESSION` | Compression mode: `auto`, `off` or `max`. |
+
+See the [restic documentation](https://restic.readthedocs.io/en/stable/075_scripting.html#environment-variables)
+for all variables restic understands. In Helm values, quote numbers, e.g.
+`GOMAXPROCS: "1"`, so that they are passed exactly as written.
+
+### Resources of backup and restore containers
+
+By default, the containers of backup and restore Jobs request 128Mi of memory
+and 20m of CPU, without limits. You can set their resources using
+`app.restic.resources` in the Helm chart, or the `-restic-resources` flag with
+the resources as JSON, e.g. `{"requests":{"memory":"512Mi"},"limits":{"memory":"2Gi"}}`.
+This replaces the default requests.
+
+restic keeps the index of the repository in memory, so its memory use grows
+with the size of the repository and the number of files in it. `restic prune`,
+which runs after each backup, uses the most. When a node runs low on memory,
+Kubernetes first evicts Pods that use more memory than they requested. For
+large repositories, set a memory request close to what restic uses, so that
+backups are not evicted. If you set a memory limit, leave enough room for
+`restic prune`, or restic is killed when it exceeds the limit. `GOGC` and
+`GOMEMLIMIT` (see above) can reduce restic's memory use.
+
+### Rotating the restic password
+
+All restic repositories use the password set with `app.restic.password` in the
+Helm chart, or the `-restic-password` flag. You can change it without
+re-encrypting any data:
+
+1. Set the new password, and set the current password as the old password,
+   using `app.restic.oldPassword` or `-restic-old-password`.
+2. From now on, each backup adds the new password to its repository, and
+   removes the old password from it. The log of the backup Job then shows
+   `Moved this repository to the new password`.
+3. Once every PVC has been backed up, remove the old password from the
+   configuration.
+
+Restores only use the new password. Keep the old password safe: repositories
+that were not backed up during the rotation, such as those of deleted PVCs or
+PVCs without a schedule, still use it. To restore such a repository, first add
+the new password to it using restic, which asks for the new password, and then
+create a PVCRestore as usual:
+
+```
+docker run --rm -it \
+  -e AWS_ACCESS_KEY_ID=... -e AWS_SECRET_ACCESS_KEY=... \
+  -e RESTIC_REPOSITORY=s3:<s3 host>/<bucket>/<namespace>/<pvc> \
+  -e RESTIC_PASSWORD='<old password>' \
+  restic/restic key add
+```
+
+Do not swap the two passwords to restore such a repository: backups would then
+move all repositories back to the old password.
 
 ### Troubleshooting
 
@@ -314,6 +418,9 @@ This will use your local credentials to access the cluster and create resources.
 Of course, if you simply have a `backsnap` binary, just run it as
 `backsnap -s3-host ...`.
 
+Backup and restore jobs use the `sjorsgielen/backsnap-restic` image released
+together with the running Backsnap version, e.g. `v0.10.0`. Builds without a
+version, such as `go run`, use `sjorsgielen/backsnap-restic:latest` instead.
 If you've made changes to the Restic image that is used in backup jobs, you can
 use `-image` to use your image. Of course, your Kubelet must be able to access
 this image, so `imagePullSecret` can be used if it is hosted on a private
@@ -338,6 +445,16 @@ contexts, and can switch to the existing one you had using `kubectl config
 use-context NAME`. Then, you can switch back using `kubectl config use-context
 minikube` in order to run the tests again.
 
+Before running the tests, `make test` builds the restic image from this
+repository (`Dockerfile.restic` and `restic.sh`) and pushes it into minikube's
+registry addon, so that changes to it are tested as well. This requires
+minikube's default `docker` container runtime. To run the tests against an
+existing image instead, set `RESTIC_IMAGE`:
+
+```
+make test RESTIC_IMAGE=sjorsgielen/backsnap-restic:v0.9.0
+```
+
 ## Building it locally / running your changes on a cluster
 
 This project uses goreleaser. If you have local changes, you can use
@@ -345,17 +462,27 @@ This project uses goreleaser. If you have local changes, you can use
 need Docker images, you can run `goreleaser release --snapshot --clean` which
 will create them locally. If you want to test them on a Kubernetes cluster, you
 should push them to a (private) registry writable by you and readable from your
-cluster. You can use the `retag-images-for-test.sh` script for this, e.g.:
+cluster. You can use the `retag-images-for-test.sh` script for this. It pushes
+both the operator image and the restic image, e.g.:
 
 ```
 $ goreleaser release --snapshot --clean
-$ ./retag-images-for-test.sh --push my-private-registry/backsnap:test-new-feature
-$ kubectl set image -n backsnap deployment/backsnap-operator manager=my-private-registry/backsnap:test-new-feature
+$ ./retag-images-for-test.sh my-private-registry test-new-feature --deploy my-test-cluster
 ```
 
-Note, on subsequent runs, that the last command does nothing if the image is
-already set to that value. If you just pushed a new image with the same name,
-ensure that the imagePullPolicy is set to Always and simply delete the Pod.
+With `--deploy`, the script also patches the operator's Deployment in the given
+kubectl context to use both images, and restarts it. The operator needs the
+restic image too, since snapshot builds default to a restic image
+(`sjorsgielen/backsnap-restic:v<snapshot version>`) that is never published.
+The patch sets the operator image and its imagePullPolicy to Always, and
+appends `-image` with the restic image to the operator's arguments, which
+overrides an earlier `-image`, since the last occurrence of a flag wins. Backup
+and restore Jobs always pull their image, so they use a newly pushed restic
+image right away. If your operator is not `backsnap/backsnap-operator`, set
+`NAMESPACE` and `DEPLOYMENT`.
+
+The patch also works if you installed Backsnap with Helm. To undo it after
+testing, apply your manifests again, or run `helm upgrade` again.
 
 Also, the commands above do not update the CRDs, so you may need to update them
 manually:
