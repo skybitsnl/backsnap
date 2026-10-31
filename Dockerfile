@@ -1,5 +1,5 @@
 # Build the manager binary
-FROM golang:1.21.5-bookworm AS builder
+FROM golang:1.27-bookworm AS builder
 ARG TARGETOS
 ARG TARGETARCH
 

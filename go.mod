@@ -1,16 +1,6 @@
 module github.com/skybitsnl/backsnap
 
-go 1.22.0
-
-toolchain go1.22.4
-
-require (
-	github.com/samber/lo v1.46.0
-	k8s.io/api v0.30.3
-	k8s.io/apimachinery v0.30.3
-	k8s.io/client-go v0.30.3
-	sigs.k8s.io/controller-runtime v0.18.4
-)
+go 1.27.0
 
 require (
 	github.com/beorn7/perks v1.0.1 // indirect
@@ -84,5 +74,10 @@ require (
 	github.com/minio/minio-go/v7 v7.0.68
 	github.com/onsi/ginkgo/v2 v2.19.0
 	github.com/onsi/gomega v1.33.1
+	github.com/samber/lo v1.46.0
+	k8s.io/api v0.30.3
+	k8s.io/apimachinery v0.30.3
+	k8s.io/client-go v0.30.3
+	sigs.k8s.io/controller-runtime v0.18.4
 	sigs.k8s.io/yaml v1.4.0
 )
