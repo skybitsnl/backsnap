@@ -252,8 +252,11 @@ spec:
   #storageClassName: fast-ssd
 ```
 
-For a concrete scenario of this, see
-[Migrating a PVC to another availability zone using Backsnap](docs/migrate_pvc_to_another_az.md).
+For concrete scenarios of this, see:
+
+- [Migrating a PVC to another availability zone using Backsnap](docs/migrate_pvc_to_another_az.md)
+- [Migrating a cluster to another location using Backsnap](docs/migrate_cluster_to_another_location.md)
+- [Moving backups to another S3 provider](docs/migrate_s3_provider.md)
 
 ### Tuning backup and restore containers
 
