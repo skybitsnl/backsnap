@@ -124,7 +124,7 @@ func (r *AutomaticPVCBackupCreator) Reconcile(ctx context.Context, req ctrl.Requ
 	}
 
 	newestBackup := lo.Reduce(childBackups.Items, func(newest time.Time, item v1alpha1.PVCBackup, _ int) time.Time {
-		if item.CreationTimestamp.Time.After(newest) {
+		if item.CreationTimestamp.After(newest) {
 			return item.CreationTimestamp.Time
 		} else {
 			return newest
@@ -153,10 +153,7 @@ func (r *AutomaticPVCBackupCreator) Reconcile(ctx context.Context, req ctrl.Requ
 	// If the next backup is in the future, schedule our next reconcile then
 	now := time.Now()
 	if nextBackup.After(now) {
-		return ctrl.Result{
-			Requeue:      true,
-			RequeueAfter: time.Until(nextBackup),
-		}, nil
+		return requeueAfter(time.Until(nextBackup)), nil
 	}
 
 	// Give backup names a unique name containing their scheduled unix timestamps.
@@ -180,14 +177,11 @@ func (r *AutomaticPVCBackupCreator) Reconcile(ctx context.Context, req ctrl.Requ
 		return ctrl.Result{}, err
 	}
 
-	logger.InfoContext(ctx, "created new PVCBackup", slog.Any("name", newBackup.ObjectMeta.Name))
+	logger.InfoContext(ctx, "created new PVCBackup", slog.Any("name", newBackup.Name))
 
 	// After that, schedule for the next run after this one
 	nextBackup = parsedSchedule.Next(newBackup.CreationTimestamp.Time)
-	return ctrl.Result{
-		Requeue:      true,
-		RequeueAfter: time.Until(nextBackup),
-	}, nil
+	return requeueAfter(time.Until(nextBackup)), nil
 }
 
 func (r *AutomaticPVCBackupCreator) SetupWithManager(mgr ctrl.Manager) error {

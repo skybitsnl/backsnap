@@ -434,7 +434,7 @@ var _ = Describe("PVCBackup and PVCRestore controller", func() {
 			// https://github.com/kubernetes-sigs/controller-runtime/issues/452
 			config := cruntimeconfig.GetConfigOrDie()
 			clientset := kubernetes.NewForConfigOrDie(config)
-			req := clientset.CoreV1().Pods(namespace).GetLogs(pod.ObjectMeta.Name, &corev1.PodLogOptions{
+			req := clientset.CoreV1().Pods(namespace).GetLogs(pod.Name, &corev1.PodLogOptions{
 				Container: "default",
 				Follow:    true,
 			})
@@ -488,7 +488,7 @@ var _ = Describe("PVCBackup and PVCRestore controller", func() {
 									Name: "data",
 									VolumeSource: corev1.VolumeSource{
 										PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
-											ClaimName: pvc.ObjectMeta.Name,
+											ClaimName: pvc.Name,
 											ReadOnly:  false,
 										},
 									},

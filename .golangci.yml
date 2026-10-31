@@ -28,6 +28,12 @@ linters:
           - dupl
           - lll
         path: internal/*
+      # Tests repeat literal names and values, so that they read as a story
+      - linters:
+          - goconst
+          - prealloc
+          - unparam
+        path: _test\.go
     paths:
       - third_party$
       - builtin$

@@ -132,8 +132,11 @@ func requiredFlag(fn string) {
 }
 
 func main() {
-	flag.Var(resticEnv, "restic-env", "KEY=VALUE environment variable to set in backup and restore containers, can be repeated")
-	flag.Var(&resticResources, "restic-resources", `resources of backup and restore containers as JSON, e.g. {"limits":{"memory":"2Gi"}} (default is a request of 128Mi memory and 20m CPU)`)
+	flag.Var(resticEnv, "restic-env",
+		"KEY=VALUE environment variable to set in backup and restore containers, can be repeated")
+	flag.Var(&resticResources, "restic-resources",
+		`resources of backup and restore containers as JSON, e.g. {"limits":{"memory":"2Gi"}} `+
+			`(default is a request of 128Mi memory and 20m CPU)`)
 	flag.Parse()
 
 	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{})))

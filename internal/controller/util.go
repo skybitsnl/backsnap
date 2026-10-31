@@ -6,12 +6,23 @@ import (
 
 	"github.com/samber/lo"
 	corev1 "k8s.io/api/core/v1"
+	ctrl "sigs.k8s.io/controller-runtime"
 )
 
 var (
 	BackupScheduleAnnotation     = "backsnap.skyb.it/schedule"
 	CurrentlyRestoringAnnotation = "backsnap.skyb.it/restoring"
 )
+
+// The name of the volume in backup and restore Pods that holds the data.
+const dataVolume = "data"
+
+// requeueAfter reconciles again after d. If d has already passed, for example
+// because a schedule was computed from a timestamp in the past, it reconciles
+// again after a second instead.
+func requeueAfter(d time.Duration) ctrl.Result {
+	return ctrl.Result{RequeueAfter: max(d, time.Second)}
+}
 
 type realClock struct{}
 

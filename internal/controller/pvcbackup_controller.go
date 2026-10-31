@@ -100,7 +100,7 @@ func (r *PVCBackupReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		}
 
 		deletionAt := backup.Status.FinishedAt.Add(backup.Spec.TTL.Duration)
-		timeUntilDeletion := deletionAt.Sub(r.Clock.Now())
+		timeUntilDeletion := deletionAt.Sub(r.Now())
 
 		if timeUntilDeletion <= 0 {
 			// Check whether this PVCBackup is the last to exist for this PVC
@@ -120,10 +120,13 @@ func (r *PVCBackupReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 
 			if !hasOlderSiblings {
 				logger.InfoContext(ctx, "wanted to remove pvcbackup, but it is the last to finish, skipping")
-				return ctrl.Result{
-					Requeue:      true,
-					RequeueAfter: backup.Spec.TTL.Duration,
-				}, nil
+				// Check again after the TTL whether a newer backup has finished, or
+				// hourly if the PVCBackup has no TTL.
+				recheckAfter := backup.Spec.TTL.Duration
+				if recheckAfter == 0 {
+					recheckAfter = time.Hour
+				}
+				return requeueAfter(recheckAfter), nil
 			}
 
 			logger.InfoContext(ctx, "deleting finished pvcbackup, since its TTL expired")
@@ -176,10 +179,7 @@ func (r *PVCBackupReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		// - or document in README how to get these metrics from the k8s API server directly
 
 		// Requeue for deletion after TTL expires
-		return ctrl.Result{
-			Requeue:      true,
-			RequeueAfter: timeUntilDeletion,
-		}, nil
+		return requeueAfter(timeUntilDeletion), nil
 	}
 
 	var pvc corev1.PersistentVolumeClaim
@@ -199,10 +199,7 @@ func (r *PVCBackupReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 			slog.Int("running", len(r.CurrentRunningBackups)),
 			slog.Int("max", r.MaxRunningBackups),
 		)
-		return ctrl.Result{
-			Requeue:      true,
-			RequeueAfter: time.Second * 30,
-		}, nil
+		return requeueAfter(time.Second * 30), nil
 	}
 	r.CurrentRunningBackups[qualifiedName] = struct{}{}
 
@@ -365,7 +362,7 @@ func (r *PVCBackupReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 						Tolerations:       backup.Spec.Tolerations,
 						PriorityClassName: backup.Spec.PriorityClassName,
 						Volumes: []corev1.Volume{{
-							Name: "data",
+							Name: dataVolume,
 							VolumeSource: corev1.VolumeSource{
 								PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
 									ClaimName: snapshotPvc.Name,
@@ -407,7 +404,7 @@ func (r *PVCBackupReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 							}}),
 							Resources: r.BackupSettings.ResticResources,
 							VolumeMounts: []corev1.VolumeMount{{
-								Name:      "data",
+								Name:      dataVolume,
 								ReadOnly:  true,
 								MountPath: "/data",
 							}},
@@ -469,8 +466,8 @@ func (r *PVCBackupReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 
 	delete(r.CurrentRunningBackups, qualifiedName)
 
-	// Reconcile ourselves immediately to clean up
-	return ctrl.Result{Requeue: true}, nil
+	// Reconcile ourselves again soon to clean up
+	return requeueAfter(0), nil
 }
 
 func setBackupFinished(backup *v1alpha1.PVCBackup, result v1alpha1.Result) {

@@ -135,10 +135,10 @@ func (r *PVCRestoreReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 			return ctrl.Result{}, err
 		}
 
-		logger.InfoContext(ctx, "created PVC to restore to", slog.String("pvc", pvc.ObjectMeta.Name))
+		logger.InfoContext(ctx, "created PVC to restore to", slog.String("pvc", pvc.Name))
 	}
 
-	if uid, ok := pvc.ObjectMeta.Annotations[CurrentlyRestoringAnnotation]; !ok || uid != string(restore.UID) {
+	if uid, ok := pvc.Annotations[CurrentlyRestoringAnnotation]; !ok || uid != string(restore.UID) {
 		logger.ErrorContext(ctx, "PVC to restore to already exists - refusing to reconcile")
 		setRestoreFinished(&restore, "Failed")
 		if err := r.Status().Update(ctx, &restore); err != nil {
@@ -197,7 +197,7 @@ func (r *PVCRestoreReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 						Tolerations:       restore.Spec.Tolerations,
 						PriorityClassName: restore.Spec.PriorityClassName,
 						Volumes: []corev1.Volume{{
-							Name: "data",
+							Name: dataVolume,
 							VolumeSource: corev1.VolumeSource{
 								PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
 									ClaimName: pvc.Name,
@@ -245,7 +245,7 @@ func (r *PVCRestoreReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 							// and therefore in the root of the PVC
 							Resources: r.BackupSettings.ResticResources,
 							VolumeMounts: []corev1.VolumeMount{{
-								Name:      "data",
+								Name:      dataVolume,
 								MountPath: "/data/data",
 							}},
 						}},
@@ -265,7 +265,7 @@ func (r *PVCRestoreReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		)
 	}
 
-	if uid, ok := job.ObjectMeta.Annotations[CurrentlyRestoringAnnotation]; !ok || uid != string(restore.UID) {
+	if uid, ok := job.Annotations[CurrentlyRestoringAnnotation]; !ok || uid != string(restore.UID) {
 		logger.ErrorContext(ctx, "Restore job already exists - refusing to reconcile")
 		setRestoreFinished(&restore, "Failed")
 		if err := r.Status().Update(ctx, &restore); err != nil {
@@ -291,7 +291,7 @@ func (r *PVCRestoreReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		slog.String("name", req.Name))
 
 	// Remove the restore annotation from the PVC
-	delete(pvc.ObjectMeta.Annotations, CurrentlyRestoringAnnotation)
+	delete(pvc.Annotations, CurrentlyRestoringAnnotation)
 	if err := r.Update(ctx, &pvc); err != nil {
 		logger.ErrorContext(ctx, "Failed to remove annotation from PVC", slog.Any("err", err))
 		setRestoreFinished(&restore, "Failed")
