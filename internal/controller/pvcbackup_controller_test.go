@@ -623,14 +623,14 @@ var _ = Describe("PVCBackup and PVCRestore controller", func() {
 	When("a backup or restore is interrupted", func() {
 		// A lock left behind by an interrupted restic process blocks other
 		// backups and restores of the same PVC, until it becomes stale after
-		// 30 minutes. With this much data, restic runs for a few seconds, long
-		// enough to be interrupted.
-		fillCommand := "dd if=/dev/urandom of=/data/random bs=1M count=900"
+		// 30 minutes.
 
 		It("should not leave a lock behind when a backup is interrupted", func() {
+			// With this much data, the backup runs for several seconds, so it is
+			// still running when the Pod is stopped.
 			By("creating a PVC with some data")
 			createPVC(ctx, namespace, "my-data", storageClassName)
-			fillPVC(ctx, namespace, "my-data", fillCommand)
+			fillPVC(ctx, namespace, "my-data", "dd if=/dev/urandom of=/data/random bs=1M count=900")
 
 			By("creating a PVCBackup")
 			backup := createBackup(ctx, namespace, "my-backup", "my-data")
@@ -654,9 +654,12 @@ var _ = Describe("PVCBackup and PVCRestore controller", func() {
 		})
 
 		It("should not leave a lock behind when a restore is interrupted", func() {
+			// With this much data, the restore runs for a few seconds, so it is
+			// still running when the Pod is stopped. More data would make the
+			// backup below slow.
 			By("backing up a PVC with some data")
 			createPVC(ctx, namespace, "my-data", storageClassName)
-			fillPVC(ctx, namespace, "my-data", fillCommand)
+			fillPVC(ctx, namespace, "my-data", "dd if=/dev/urandom of=/data/random bs=1M count=300")
 			expectBackupSucceeds(ctx, createBackup(ctx, namespace, "my-backup", "my-data"))
 			Expect(listObjects(ctx, mc, mbucket, namespace+"/my-data/locks/")).To(BeEmpty())
 
