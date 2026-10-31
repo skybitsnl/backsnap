@@ -4,9 +4,11 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"io/fs"
 	"net"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -607,7 +609,186 @@ var _ = Describe("PVCBackup and PVCRestore controller", func() {
 			expectPVCStorageClass(ctx, namespace, "my-data", nonexistentStorageClassName)
 		})
 	})
+
+	When("a backup or restore is interrupted", func() {
+		// A lock left behind by an interrupted restic process blocks other
+		// backups and restores of the same PVC, until it becomes stale after
+		// 30 minutes. With this much data, restic runs for a few seconds, long
+		// enough to be interrupted.
+		fillCommand := "dd if=/dev/urandom of=/data/random bs=1M count=900"
+
+		It("should not leave a lock behind when a backup is interrupted", func() {
+			By("creating a PVC with some data")
+			createPVC(ctx, namespace, "my-data", storageClassName)
+			fillPVC(ctx, namespace, "my-data", fillCommand)
+
+			By("creating a PVCBackup")
+			backup := createBackup(ctx, namespace, "my-backup", "my-data")
+
+			By("waiting until restic uploads data into the new repository, while holding a lock")
+			Eventually(func() []string {
+				return listObjects(ctx, mc, mbucket, namespace+"/my-data/data/")
+			}, 2*time.Minute, 100*time.Millisecond).ShouldNot(BeEmpty())
+			Expect(listObjects(ctx, mc, mbucket, namespace+"/my-data/config")).To(HaveLen(1))
+			Expect(listObjects(ctx, mc, mbucket, namespace+"/my-data/locks/")).ToNot(BeEmpty())
+
+			By("deleting the PVCBackup, and stopping its Pod")
+			Expect(k8sClient.Delete(ctx, backup)).Should(Succeed())
+			stopJobPods(ctx, namespace, "my-backup")
+
+			By("the backup was interrupted, so no snapshot was saved")
+			Expect(listObjects(ctx, mc, mbucket, namespace+"/my-data/snapshots/")).To(BeEmpty())
+
+			By("restic has removed its lock")
+			Expect(listObjects(ctx, mc, mbucket, namespace+"/my-data/locks/")).To(BeEmpty())
+		})
+
+		It("should not leave a lock behind when a restore is interrupted", func() {
+			By("backing up a PVC with some data")
+			createPVC(ctx, namespace, "my-data", storageClassName)
+			fillPVC(ctx, namespace, "my-data", fillCommand)
+			expectBackupSucceeds(ctx, createBackup(ctx, namespace, "my-backup", "my-data"))
+			Expect(listObjects(ctx, mc, mbucket, namespace+"/my-data/locks/")).To(BeEmpty())
+
+			By("creating a PVCRestore")
+			restore := &v1alpha1.PVCRestore{
+				ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: "my-restore"},
+				Spec: v1alpha1.PVCRestoreSpec{
+					SourcePVC:     "my-data",
+					TargetPVC:     "my-restored-data",
+					TargetPVCSize: resource.MustParse("1Gi"),
+				},
+			}
+			Expect(k8sClient.Create(ctx, restore)).Should(Succeed())
+
+			By("waiting until restic restores, while holding a lock")
+			Eventually(func() []string {
+				return listObjects(ctx, mc, mbucket, namespace+"/my-data/locks/")
+			}, 2*time.Minute, 100*time.Millisecond).ShouldNot(BeEmpty())
+
+			By("deleting the PVCRestore, and stopping its Pod")
+			Expect(k8sClient.Delete(ctx, restore)).Should(Succeed())
+			stopJobPods(ctx, namespace, "my-restore")
+
+			By("restic has removed its lock")
+			Expect(listObjects(ctx, mc, mbucket, namespace+"/my-data/locks/")).To(BeEmpty())
+		})
+	})
+
+	When("the repository has a stale lock", func() {
+		It("should remove the lock and back up", func() {
+			// The lock in this repository was left by a restic backup that
+			// was killed, and is older than 30 minutes, so restic considers
+			// it stale. See testdata/generate-stale-lock-repo.sh.
+			By("uploading a repository with a stale lock")
+			uploadDir(ctx, mc, mbucket, "testdata/stale-lock-repo", namespace+"/my-data")
+			Expect(listObjects(ctx, mc, mbucket, namespace+"/my-data/locks/")).To(HaveLen(1))
+
+			By("backing up a PVC into it")
+			createPVC(ctx, namespace, "my-data", storageClassName)
+			fillPVC(ctx, namespace, "my-data", "echo 'Hello World!' >/data/foo.txt")
+			expectBackupSucceeds(ctx, createBackup(ctx, namespace, "my-backup", "my-data"))
+
+			By("the stale lock has been removed")
+			Expect(listObjects(ctx, mc, mbucket, namespace+"/my-data/locks/")).To(BeEmpty())
+		})
+	})
 })
+
+// fillPVC runs command in a Job with the PVC mounted at /data, and waits for
+// the Job to complete.
+func fillPVC(ctx context.Context, namespace, pvcName, command string) {
+	GinkgoHelper()
+	job := &batchv1.Job{
+		ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: "fill-" + pvcName},
+		Spec: batchv1.JobSpec{
+			Template: corev1.PodTemplateSpec{
+				Spec: corev1.PodSpec{
+					RestartPolicy: corev1.RestartPolicyOnFailure,
+					Volumes: []corev1.Volume{{
+						Name: "data",
+						VolumeSource: corev1.VolumeSource{
+							PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{ClaimName: pvcName},
+						},
+					}},
+					Containers: []corev1.Container{{
+						Name:         "default",
+						Image:        "ubuntu:jammy",
+						Command:      []string{"/bin/bash", "-c", command},
+						VolumeMounts: []corev1.VolumeMount{{Name: "data", MountPath: "/data"}},
+					}},
+				},
+			},
+		},
+	}
+	Expect(k8sClient.Create(ctx, job)).Should(Succeed())
+	Eventually(func() *metav1.Time {
+		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(job), job)).Should(Succeed())
+		return job.Status.CompletionTime
+	}, 2*time.Minute, time.Second).ShouldNot(BeNil())
+}
+
+func createBackup(ctx context.Context, namespace, name, pvcName string) *v1alpha1.PVCBackup {
+	GinkgoHelper()
+	backup := &v1alpha1.PVCBackup{
+		ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: name},
+		Spec:       v1alpha1.PVCBackupSpec{PVCName: pvcName},
+	}
+	Expect(k8sClient.Create(ctx, backup)).Should(Succeed())
+	return backup
+}
+
+func expectBackupSucceeds(ctx context.Context, backup *v1alpha1.PVCBackup) {
+	GinkgoHelper()
+	Eventually(func() *metav1.Time {
+		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(backup), backup)).Should(Succeed())
+		return backup.Status.FinishedAt
+	}, 3*time.Minute, time.Second).ShouldNot(BeNil())
+	Expect(*backup.Status.Result).To(BeEquivalentTo("Succeeded"))
+}
+
+// stopJobPods deletes the Pods of a Job with a grace period of one second,
+// instead of the default 30 seconds, and waits until they are gone. Without
+// handling SIGTERM, restic would be killed before it removes its locks. The
+// owner of the Job must already be deleted, so that the Job does not start new
+// Pods.
+func stopJobPods(ctx context.Context, namespace, jobName string) {
+	GinkgoHelper()
+	Expect(k8sClient.DeleteAllOf(ctx, &corev1.Pod{}, client.InNamespace(namespace),
+		client.MatchingLabels{"job-name": jobName}, client.GracePeriodSeconds(1))).Should(Succeed())
+	Eventually(func() []corev1.Pod {
+		pods := &corev1.PodList{}
+		Expect(k8sClient.List(ctx, pods, client.InNamespace(namespace), client.MatchingLabels{"job-name": jobName})).Should(Succeed())
+		return pods.Items
+	}, 2*time.Minute, time.Second).Should(BeEmpty())
+}
+
+// listObjects returns the keys of all objects in the bucket under prefix.
+func listObjects(ctx context.Context, mc *mclient.Client, bucket, prefix string) []string {
+	GinkgoHelper()
+	var keys []string
+	for object := range mc.ListObjects(ctx, bucket, mclient.ListObjectsOptions{Prefix: prefix, Recursive: true}) {
+		Expect(object.Err).ToNot(HaveOccurred())
+		keys = append(keys, object.Key)
+	}
+	return keys
+}
+
+// uploadDir uploads all files in dir to the bucket, under prefix.
+func uploadDir(ctx context.Context, mc *mclient.Client, bucket, dir, prefix string) {
+	GinkgoHelper()
+	Expect(filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return err
+		}
+		rel, err := filepath.Rel(dir, path)
+		if err != nil {
+			return err
+		}
+		_, err = mc.FPutObject(ctx, bucket, prefix+"/"+filepath.ToSlash(rel), path, mclient.PutObjectOptions{})
+		return err
+	})).Should(Succeed())
+}
 
 func createPVC(ctx context.Context, namespace, name, storageClassName string) {
 	GinkgoHelper()

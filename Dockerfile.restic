@@ -1,20 +1,17 @@
-FROM restic/restic:0.16.0 AS restic
+FROM restic/restic:0.19.1 AS restic
 
-FROM ubuntu:focal
+FROM ubuntu:26.04
 
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends ca-certificates curl \
+  && apt-get install -y --no-install-recommends ca-certificates tini \
   && rm -rf /var/lib/apt/lists/*
-
-RUN curl -L \
-	https://storage.googleapis.com/kubernetes-release/release/$(curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)/bin/linux/$(dpkg --print-architecture)/kubectl \
-	-o /usr/local/bin/kubectl && \
-	ls -la /usr/local/bin && \
-	chmod +x /usr/local/bin/kubectl && \
-	kubectl version --client
 
 COPY --from=restic /usr/bin/restic /usr/bin/restic
 RUN restic version
 
 COPY restic.sh /usr/local/bin
-CMD restic.sh
+
+# tini forwards signals to the whole process group (-g), so that restic itself
+# receives the SIGTERM when the Pod is stopped, and removes its locks.
+ENTRYPOINT ["/usr/bin/tini", "-g", "--"]
+CMD ["restic.sh"]

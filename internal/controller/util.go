@@ -39,17 +39,25 @@ type BackupSettings struct {
 	ResticEnv         map[string]string
 }
 
+// defaultResticEnv contains defaults for variables in backup and restore
+// containers, which can be overridden by ResticEnv.
+var defaultResticEnv = map[string]string{
+	// How long restic waits for a lock on the repository (restic --retry-lock)
+	"BACKSNAP_RETRY_LOCK": "30m",
+}
+
 // resticEnv returns the environment for a backup or restore container: the
-// variables managed by the operator, followed by the configured ResticEnv.
-// Managed variables cannot be overridden by ResticEnv.
+// variables managed by the operator, followed by the configured ResticEnv and
+// the defaults. Managed variables cannot be overridden by ResticEnv.
 func (s BackupSettings) resticEnv(managed []corev1.EnvVar) []corev1.EnvVar {
-	names := lo.Keys(s.ResticEnv)
+	extra := lo.Assign(defaultResticEnv, s.ResticEnv)
+	names := lo.Keys(extra)
 	slices.Sort(names)
 
 	env := managed
 	for _, name := range names {
 		if !lo.ContainsBy(managed, func(e corev1.EnvVar) bool { return e.Name == name }) {
-			env = append(env, corev1.EnvVar{Name: name, Value: s.ResticEnv[name]})
+			env = append(env, corev1.EnvVar{Name: name, Value: extra[name]})
 		}
 	}
 	return env

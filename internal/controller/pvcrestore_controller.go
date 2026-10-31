@@ -213,6 +213,7 @@ func (r *PVCRestoreReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 								restore.Spec.SourceSnapshot,
 								"--sparse", "--verify",
 								"--target", "/data",
+								"--retry-lock", "$(BACKSNAP_RETRY_LOCK)",
 							},
 							Env: r.BackupSettings.resticEnv([]corev1.EnvVar{{
 								Name:  "BACKUP_NAMESPACE",
