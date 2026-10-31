@@ -165,6 +165,9 @@ spec:
         # main.go) for more information.
 
         image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+        {{- with .Values.image.pullPolicy }}
+        imagePullPolicy: {{ . }}
+        {{- end }}
         name: manager
 
         {{- with .Values.app.securityContext }}
