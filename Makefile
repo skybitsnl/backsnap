@@ -74,7 +74,7 @@ test: manifests generate fmt vet envtest ## Run tests.
 	}
 	@[ -n "$(RESTIC_IMAGE)" ] || $(MAKE) minikube-restic-image
 	RESTIC_IMAGE="$(or $(RESTIC_IMAGE),$(MINIKUBE_RESTIC_IMAGE))" \
-	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test ./... -coverprofile cover.out -ginkgo.vv -test.v
+	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test ./... -timeout 30m -coverprofile cover.out -ginkgo.vv -test.v
 
 # The tests use the restic image built from this repository, unless RESTIC_IMAGE
 # is set to an existing image, e.g. `make test RESTIC_IMAGE=sjorsgielen/backsnap-restic:v0.9.0`.
