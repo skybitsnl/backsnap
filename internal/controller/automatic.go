@@ -84,6 +84,14 @@ func (r *AutomaticPVCBackupCreator) Reconcile(ctx context.Context, req ctrl.Requ
 		return ctrl.Result{}, err
 	}
 
+	// Don't back up a PVC while it is being restored, as that would back up
+	// partially restored data. Once the restore succeeds, the annotation is
+	// removed, which triggers a new reconcile.
+	if _, ok := pvc.Annotations[CurrentlyRestoringAnnotation]; ok {
+		logger.InfoContext(ctx, "ignoring PVC for backup because it is being restored")
+		return ctrl.Result{}, nil
+	}
+
 	// Find the schedule for this PVC, from its annotations, namespace annotations or default flags.
 	var schedule string
 	if s, ok := pvc.Annotations[BackupScheduleAnnotation]; ok {

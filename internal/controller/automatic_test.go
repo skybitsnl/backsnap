@@ -19,9 +19,12 @@ import (
 
 var _ = Describe("Automatic controller", func() {
 	var namespace string
-	ctx, cancel := context.WithCancel(context.Background())
+	var ctx context.Context
+	var cancel context.CancelFunc
 
 	BeforeEach(func() {
+		ctx, cancel = context.WithCancel(context.Background())
+
 		By("creating a namespace")
 		namespace = uuid.NewString()
 		err := k8sClient.Create(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{
@@ -57,6 +60,12 @@ var _ = Describe("Automatic controller", func() {
 
 		cancel()
 	})
+
+	listBackups := func() []v1alpha1.PVCBackup {
+		var list v1alpha1.PVCBackupList
+		Expect(k8sClient.List(ctx, &list, client.InNamespace(namespace))).Should(Succeed())
+		return list.Items
+	}
 
 	When("a PVC exists", func() {
 		It("should get a PVCBackup if it has existed for long enough", func() {
@@ -97,6 +106,39 @@ var _ = Describe("Automatic controller", func() {
 
 				return len(list.Items) == 2 && lo.EveryBy(list.Items, func(b v1alpha1.PVCBackup) bool { return b.Spec.PVCName == "my-data" })
 			}, time.Minute, time.Second).Should(BeTrue())
+		})
+	})
+
+	When("a PVC is being restored", func() {
+		It("should not get a PVCBackup until the restore has finished", func() {
+			By("creating a PVC that is being restored")
+			pvc := &corev1.PersistentVolumeClaim{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:        "my-data",
+					Namespace:   namespace,
+					Annotations: map[string]string{CurrentlyRestoringAnnotation: "some-restore-uid"},
+				},
+				Spec: corev1.PersistentVolumeClaimSpec{
+					AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
+					Resources: corev1.VolumeResourceRequirements{
+						Requests: map[corev1.ResourceName]resource.Quantity{
+							corev1.ResourceStorage: resource.MustParse("1Gi"),
+						},
+					},
+				},
+			}
+			Expect(k8sClient.Create(ctx, pvc)).Should(Succeed())
+
+			By("no PVCBackup is created, although one is due within a minute")
+			Consistently(listBackups, time.Minute+10*time.Second, time.Second).Should(BeEmpty())
+
+			By("finishing the restore, which removes the annotation")
+			Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(pvc), pvc)).Should(Succeed())
+			delete(pvc.Annotations, CurrentlyRestoringAnnotation)
+			Expect(k8sClient.Update(ctx, pvc)).Should(Succeed())
+
+			By("a PVCBackup is created right away, since one is overdue")
+			Eventually(listBackups, 20*time.Second, time.Second).Should(HaveLen(1))
 		})
 	})
 })
