@@ -3,12 +3,15 @@ set -e -o pipefail
 
 # When the Pod is stopped, tini sends SIGTERM to restic as well. restic then
 # removes its locks and exits. Wait for that, instead of exiting immediately.
-trap 'echo -e "\n== Received SIGTERM, exiting ==\n"; exit 143' TERM
+trap '{ set +x; } 2>/dev/null; echo -e "\n== Received SIGTERM, exiting ==\n"; exit 143' TERM
 
 # Wait for locks held by other restic processes, such as a running restore,
-# instead of failing immediately.
+# instead of failing immediately. With set -x, only the call of this function
+# is logged, not the restic command inside it as well.
 restic() {
+  { local xtrace=$-; set +x; } 2>/dev/null
   command restic --retry-lock "${BACKSNAP_RETRY_LOCK}" "$@"
+  { local exit_code=$?; [[ $xtrace == *x* ]] && set -x; return $exit_code; } 2>/dev/null
 }
 
 restic version
