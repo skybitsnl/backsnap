@@ -47,7 +47,7 @@ namespaces do have an overriding schedule set).
 
 ```
 helm repo add backsnap https://skybitsnl.github.io/backsnap
-helm install --create-namespace --namespace backsnap backsnap -f values.yaml
+helm install --create-namespace --namespace backsnap backsnap backsnap/backsnap -f values.yaml
 ```
 
 An example `values.yaml` follows. For more configuration options, see the
