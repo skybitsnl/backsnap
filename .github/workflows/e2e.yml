@@ -29,6 +29,7 @@ jobs:
       with:
         minikube-version: 1.39.0
         kubernetes-version: v1.37.0
+        container-runtime: docker
         addons: volumesnapshots,csi-hostpath-driver
     - name: Minikube version
       run: kubectl version
