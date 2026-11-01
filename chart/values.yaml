@@ -49,6 +49,8 @@ app:
   schedule: "@daily"
   # Default is nothing to run backsnap in automatic mode
   manual: ""
+  # Maximum number of backups that run at the same time; 0 means no maximum
+  maxRunningBackups: 1
   snapshotClass: ""
   storageClass: ""
   # Override storageClass for backup or restore PVCs only

@@ -88,6 +88,11 @@ spec:
         - --manual
         {{- end }}
 
+        # The maximum number of backups that run at the same time. Further
+        # backups wait until one finishes. 0 means no maximum.
+        - --max-running-backups
+        - {{ .Values.app.maxRunningBackups | quote }}
+
         # Backsnap automatically creates volume snapshots while it is preparing
         # for a backup. The volume snapshot class name set here is used for all
         # volume snapshots created by Backsnap. Otherwise, the cluster default
