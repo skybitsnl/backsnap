@@ -2,6 +2,17 @@ apiVersion: v1
 entries:
   backsnap:
   - apiVersion: v2
+    appVersion: v0.10.0
+    created: "2026-11-01T16:01:47.162254+01:00"
+    description: Kubernetes backup operator - off-site point-in-time backups with
+      history
+    digest: 68ee9f9b2576d85d81e478d1c9c19004966c6ed96c00c9580ad15ce11c91b8f6
+    name: backsnap
+    type: application
+    urls:
+    - backsnap-0.10.0.tgz
+    version: 0.10.0
+  - apiVersion: v2
     appVersion: v0.9.0
     created: "2024-09-15T16:50:08.017032+02:00"
     description: Kubernetes backup operator - off-site point-in-time backups with
@@ -67,4 +78,4 @@ entries:
     urls:
     - backsnap-0.7.0.tgz
     version: 0.7.0
-generated: "2024-09-15T16:50:08.012367+02:00"
+generated: "2026-11-01T16:01:47.161269+01:00"
